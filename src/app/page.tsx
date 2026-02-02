@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit, 
+import { useAuth } from '@/hooks/useAuth';
+import { useAI } from '@/hooks/useAI';
+import {
+  TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info
 } from 'lucide-react';
 
@@ -40,86 +42,9 @@ interface UserProfile {
 }
 
 /**
- * --- LOGIQUE DES HOOKS CONSOLIDÉE ---
- * Pour l'aperçu, nous incluons la logique directement ici.
+ * --- LOGIQUE DES HOOKS ---
+ * Les hooks réels sont importés depuis @/hooks
  */
-
-function useAuth() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulation d'une vérification de session
-    const timer = setTimeout(() => {
-      setLoading(false);
-      setUser({ uid: 'user_123', email: 'investisseur@mirror.ai' });
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const loginAnonymously = () => setUser({ uid: 'user_123' });
-  const logout = () => setUser(null);
-
-  return { user, loading, loginAnonymously, logout };
-}
-
-function useAI() {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const analyzePortfolio = async (stocks: Stock[], marketPrices: Record<string, number>) => {
-    setIsAnalyzing(true);
-    setError(null);
-
-    try {
-      // Simulation de l'appel API sécurisé
-      await new Promise(resolve => setTimeout(resolve, 2500));
-
-      const mockResult: AIAnalysis = {
-        health: "EXCELLENTE",
-        healthDesc: "Votre portefeuille présente une forte résilience grâce à votre exposition NVDA. Le risque sectoriel est modéré.",
-        prediction: "+12.5%",
-        predictionDesc: "Tendance haussière portée par le secteur des semi-conducteurs.",
-        signals: [
-          {
-            name: "AAPL",
-            reason: "Retard de valorisation / Services",
-            justification: "Apple montre une croissance robuste de ses revenus de services. L'IA 'Apple Intelligence' est un catalyseur majeur pour le cycle de renouvellement iPhone.",
-            rec: "RENFORCER",
-            urgency: "MODÉRÉE",
-            color: "blue"
-          },
-          {
-            name: "NVDA",
-            reason: "Sur-achat technique à court terme",
-            justification: "Nvidia domine le marché mais le RSI indique une zone de sur-achat. Il serait stratégique de prendre des bénéfices partiels.",
-            rec: "ALLÉGER",
-            urgency: "HAUTE",
-            color: "rose"
-          },
-          {
-            name: "GOOGL",
-            reason: "Opportunité : Leader IA sous-évalué",
-            justification: "Alphabet dispose du meilleur rapport Qualité/Prix dans le secteur IA actuel. L'intégration de Gemini crée un flux de revenus récurrents.",
-            rec: "ACHETER",
-            urgency: "HAUTE",
-            color: "emerald"
-          }
-        ],
-        newsHighlight: "Annonce Fed : Maintien des taux, perspective de baisse au T3 2024."
-      };
-      
-      setAnalysis(mockResult);
-    } catch (err) {
-      setError("Impossible de contacter le cerveau Mirror AI.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  return { analyzePortfolio, analysis, isAnalyzing, error };
-}
 
 /**
  * --- COMPOSANT PRINCIPAL ---
@@ -134,7 +59,7 @@ export default function Dashboard() {
     { symbol: 'NVDA', shares: 5, avgPrice: 450.25 },
     { symbol: 'TSLA', shares: 15, avgPrice: 210.10 }
   ]);
-  
+
   const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
   const [showAIModal, setShowAIModal] = useState(false);
 
@@ -173,7 +98,7 @@ export default function Dashboard() {
       </div>
     </div>
   );
-  
+
   if (!user) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-6 text-center">
@@ -182,7 +107,7 @@ export default function Dashboard() {
         </div>
         <h1 className="text-4xl font-black tracking-tighter uppercase italic mb-4">Mirror<span className="text-blue-600">AI</span></h1>
         <p className="text-slate-500 mb-8 max-w-sm">Connectez-vous pour commencer à tracker votre patrimoine avec l'aide de l'IA.</p>
-        <button 
+        <button
           onClick={() => loginAnonymously()}
           className="bg-slate-900 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95"
         >
@@ -200,7 +125,7 @@ export default function Dashboard() {
         .backface-hidden { backface-visibility: hidden; }
         .rotate-y-180 { transform: rotateY(180deg); }
       `}</style>
-      
+
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40 px-6 py-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -215,19 +140,19 @@ export default function Dashboard() {
               <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
             </button>
             <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden text-slate-900">
-               <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
+              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 mt-10 space-y-10">
-        
+
         {/* KPI DASHBOARD */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform duration-700">
-               <Activity size={180} />
+              <Activity size={180} />
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2 italic">Valeur Totale du Portefeuille</p>
             <div className="flex items-baseline gap-4 flex-wrap">
@@ -241,12 +166,12 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => { setShowAIModal(true); analyzePortfolio(stocks, marketPrices); }}
             className="bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
           >
             <div className="bg-white/10 p-4 rounded-2xl group-hover:scale-110 transition-transform">
-               <Sparkles className="text-blue-400 w-8 h-8" />
+              <Sparkles className="text-blue-400 w-8 h-8" />
             </div>
             <div className="relative z-10">
               <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Lancer l'audit <br /> Mirror AI</h3>
@@ -309,12 +234,12 @@ export default function Dashboard() {
                   <Sparkles className="text-white w-6 h-6 animate-pulse" />
                 </div>
                 <div>
-                   <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900">Audit Mirror AI</h3>
-                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Veille stratégique & Diagnostics</p>
+                  <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900">Audit Mirror AI</h3>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Veille stratégique & Diagnostics</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setShowAIModal(false)} 
+              <button
+                onClick={() => setShowAIModal(false)}
                 className="p-3 bg-white rounded-full text-slate-400 hover:text-slate-900 transition-all shadow-sm"
               >
                 <X size={24} />
@@ -377,7 +302,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            
+
             <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row gap-4 justify-between items-center text-slate-400">
               <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-emerald-500" /> Intelligence artificielle Gemini 2.5 Flash
@@ -398,11 +323,11 @@ export default function Dashboard() {
  */
 function FlipCard({ item }: { item: AISignal }) {
   const [flipped, setFlipped] = useState(false);
-  
+
   return (
     <div className="relative h-72 md:h-64 w-full cursor-pointer perspective-1000" onClick={() => setFlipped(!flipped)}>
       <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
-        
+
         {/* FACE AVANT (Résumé) */}
         <div className="absolute inset-0 backface-hidden bg-white border border-slate-100 rounded-[2.5rem] p-8 md:p-10 shadow-xl flex flex-col justify-between hover:border-blue-400 transition-colors">
           <div className="flex justify-between items-start">
@@ -415,10 +340,9 @@ function FlipCard({ item }: { item: AISignal }) {
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <span className={`px-8 py-4 font-black text-[10px] rounded-2xl uppercase tracking-widest border shadow-lg ${
-              item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-              (item.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100')
-            }`}>
+            <span className={`px-8 py-4 font-black text-[10px] rounded-2xl uppercase tracking-widest border shadow-lg ${item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                (item.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100')
+              }`}>
               {item.rec}
             </span>
             <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">Urgence : {item.urgency}</span>
@@ -432,8 +356,8 @@ function FlipCard({ item }: { item: AISignal }) {
             "{item.justification || item.reason}"
           </p>
           <div className="mt-8 flex items-center gap-3 text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
-             <div className="w-10 h-px bg-blue-900"></div>
-             Analyse sectorielle temps réel
+            <div className="w-10 h-px bg-blue-900"></div>
+            Analyse sectorielle temps réel
           </div>
         </div>
 

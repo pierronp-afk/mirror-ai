@@ -6,7 +6,11 @@ import { NextResponse } from 'next/server';
  */
 export async function POST(req: Request) {
   // La clé API est fournie par l'environnement d'exécution
-  const apiKey = ""; 
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return NextResponse.json({ error: "Configuration serveur manquante : GEMINI_API_KEY introuvable." }, { status: 500 });
+  }
 
   try {
     const { prompt } = await req.json();
@@ -27,7 +31,7 @@ export async function POST(req: Request) {
      */
     const callGeminiWithRetry = async (retries = 5, delay = 1000): Promise<any> => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-      
+
       const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -54,7 +58,7 @@ export async function POST(req: Request) {
     };
 
     const data = await callGeminiWithRetry();
-    
+
     // Extraction du texte de la réponse
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Erreur Route API AI:", error);
     return NextResponse.json(
-      { error: "Échec de l'analyse IA", message: error.message }, 
+      { error: "Échec de l'analyse IA", message: error.message },
       { status: 500 }
     );
   }
