@@ -1,5 +1,16 @@
 import { NextResponse } from 'next/server';
 
+interface FinnhubQuote {
+    c?: number;
+    d?: number;
+    dp?: number;
+    h?: number;
+    l?: number;
+    o?: number;
+    pc?: number;
+    t?: number;
+}
+
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get('symbol');
@@ -20,12 +31,13 @@ export async function GET(req: Request) {
             throw new Error(`Finnhub API Error: ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as FinnhubQuote;
         // Finnhub response format for quote: { c: current price, d: change, dp: percent change, ... }
         return NextResponse.json(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Erreur inconnue";
         return NextResponse.json(
-            { error: "Erreur lors de la récupération des données de marché", details: error.message },
+            { error: "Erreur lors de la récupération des données de marché", details: message },
             { status: 500 }
         );
     }

@@ -1,12 +1,12 @@
-"use client";
 import { useState, useEffect } from 'react';
+import { MarketPrices } from '@/types';
 
 /**
  * Hook pour récupérer les données de marché en temps réel (ou presque).
  * Utilise notre route API /api/market pour éviter d'exposer la clé Finnhub.
  */
 export function useMarketData(symbols: string[], refreshInterval = 60000) {
-    const [prices, setPrices] = useState<Record<string, number>>({});
+    const [prices, setPrices] = useState<MarketPrices>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +19,7 @@ export function useMarketData(symbols: string[], refreshInterval = 60000) {
 
             try {
                 setLoading(true);
-                const newPrices: Record<string, number> = {};
+                const newPrices: MarketPrices = {};
 
                 // On parallelise les requêtes pour chaque symbole
                 await Promise.all(symbols.map(async (symbol) => {
@@ -27,7 +27,7 @@ export function useMarketData(symbols: string[], refreshInterval = 60000) {
                         const res = await fetch(`/api/market?symbol=${symbol}`);
                         if (!res.ok) throw new Error(`Erreur pour ${symbol}`);
 
-                        const data = await res.json();
+                        const data = await res.json() as { c?: number };
                         // Finnhub : 'c' est le prix actuel (Current price)
                         if (data.c) {
                             newPrices[symbol] = data.c;
@@ -43,9 +43,10 @@ export function useMarketData(symbols: string[], refreshInterval = 60000) {
                     setLoading(false);
                     setError(null);
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
                 if (isMounted) {
-                    setError(err.message || "Erreur récupération prix");
+                    const message = err instanceof Error ? err.message : "Erreur récupération prix";
+                    setError(message);
                     setLoading(false);
                 }
             }
@@ -61,7 +62,7 @@ export function useMarketData(symbols: string[], refreshInterval = 60000) {
             isMounted = false;
             clearInterval(intervalId);
         };
-    }, [JSON.stringify(symbols), refreshInterval]); // On surveille les symboles et l'intervalle
+    }, [symbols, refreshInterval]); // symbols est mémoïsé dans Dashboard
 
     return { prices, loading, error };
 }

@@ -1,16 +1,16 @@
-"use client";
 import { useState } from 'react';
+import { Stock, MarketPrices, AIAnalysis } from '@/types';
 
 export function useAI() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const analyzePortfolio = async (stocks: any[], marketPrices: any) => {
+  const analyzePortfolio = async (stocks: Stock[], marketPrices: MarketPrices) => {
     setIsAnalyzing(true);
     setError(null);
 
-    const portfolioContext = stocks.length > 0 
+    const portfolioContext = stocks.length > 0
       ? stocks.map(s => `${s.symbol}: ${s.shares} titres (Prix: ${marketPrices[s.symbol] || s.avgPrice}€)`).join(', ')
       : "Portefeuille vide.";
 
@@ -51,8 +51,8 @@ export function useAI() {
 
       const data = await response.json();
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
-      if (jsonMatch) setAnalysis(JSON.parse(jsonMatch[0]));
-    } catch (err: any) {
+      if (jsonMatch) setAnalysis(JSON.parse(jsonMatch[0]) as AIAnalysis);
+    } catch {
       setError("L'IA est momentanément indisponible.");
     } finally {
       setIsAnalyzing(false);

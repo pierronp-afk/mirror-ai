@@ -1,46 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
 import { useMarketData } from '@/hooks/useMarketData';
+import { Stock, AISignal } from '@/types';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info
 } from 'lucide-react';
 
-/**
- * --- INTERFACES & TYPES ---
- */
-
-interface Stock {
-  symbol: string;
-  shares: number;
-  avgPrice: number;
-}
-
-interface AISignal {
-  name: string;
-  reason: string;
-  justification: string;
-  rec: string;
-  urgency: string;
-  color: string;
-}
-
-interface AIAnalysis {
-  health: string;
-  healthDesc: string;
-  prediction: string;
-  predictionDesc: string;
-  signals: AISignal[];
-  newsHighlight: string;
-}
-
-interface UserProfile {
-  uid: string;
-  email?: string;
-}
+// Les interfaces & types sont maintenant importés depuis @/types
 
 /**
  * --- LOGIQUE DES HOOKS ---
@@ -55,11 +25,13 @@ export default function Dashboard() {
   const { user, loading: authLoading, loginAnonymously } = useAuth();
   const { analyzePortfolio, analysis, isAnalyzing, error: aiError } = useAI();
 
-  const [stocks, setStocks] = useState<Stock[]>([
+  const [stocks] = useState<Stock[]>([
     { symbol: 'AAPL', shares: 10, avgPrice: 175.50 },
     { symbol: 'NVDA', shares: 5, avgPrice: 450.25 },
     { symbol: 'TSLA', shares: 15, avgPrice: 210.10 }
   ]);
+
+  const [showAIModal, setShowAIModal] = useState(false);
 
   // Récupération des données réelles du marché
   // On extrait juste les symboles du portefeuille (AAPL, NVDA, TSLA...)
@@ -98,12 +70,12 @@ export default function Dashboard() {
           <BrainCircuit className="text-white w-12 h-12" />
         </div>
         <h1 className="text-4xl font-black tracking-tighter uppercase italic mb-4">Mirror<span className="text-blue-600">AI</span></h1>
-        <p className="text-slate-500 mb-8 max-w-sm">Connectez-vous pour commencer à tracker votre patrimoine avec l'aide de l'IA.</p>
+        <p className="text-slate-500 mb-8 max-w-sm">Connectez-vous pour commencer à tracker votre patrimoine avec l&apos;aide de l&apos;IA.</p>
         <button
           onClick={() => loginAnonymously()}
           className="bg-slate-900 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95"
         >
-          Démarrer l'expérience
+          Démarrer l&apos;expérience
         </button>
       </div>
     );
@@ -166,7 +138,7 @@ export default function Dashboard() {
               <Sparkles className="text-blue-400 w-8 h-8" />
             </div>
             <div className="relative z-10">
-              <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Lancer l'audit <br /> Mirror AI</h3>
+              <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Lancer l&apos;audit <br /> Mirror AI</h3>
               <p className="text-slate-400 group-hover:text-blue-100 text-xs mt-2 font-medium">Analyse prédictive et conseils stratégiques.</p>
             </div>
           </button>
@@ -227,7 +199,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900">Audit Mirror AI</h3>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Veille stratégique & Diagnostics</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Veille stratégique &amp; Diagnostics</p>
                 </div>
               </div>
               <button
@@ -260,7 +232,7 @@ export default function Dashboard() {
                       <div className="bg-white/5 backdrop-blur-md rounded-[2rem] p-8 border border-white/10 flex flex-col justify-center">
                         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400 mb-2 italic">Projection à 3 mois</p>
                         <p className="text-4xl md:text-5xl font-black text-white tracking-tighter">{analysis.prediction}</p>
-                        <p className="text-xs text-slate-400 italic mt-4">"{analysis.predictionDesc}"</p>
+                        <p className="text-xs text-slate-400 italic mt-4">&quot;{analysis.predictionDesc}&quot;</p>
                       </div>
                     </div>
                   </div>
@@ -289,8 +261,8 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center p-20 bg-rose-50 rounded-[3rem] border border-rose-100">
                   <AlertCircle className="mx-auto text-rose-500 w-12 h-12 mb-4" />
-                  <p className="text-rose-900 font-bold">{aiError || "Une erreur est survenue lors de l'analyse."}</p>
-                  <button onClick={() => analyzePortfolio(stocks, marketPrices)} className="mt-6 text-rose-600 font-black uppercase text-[10px] tracking-widest border-b-2 border-rose-200">Réessayer l'analyse</button>
+                  <p className="text-rose-900 font-bold">{aiError || "Une erreur est survenue lors de l&apos;analyse."}</p>
+                  <button onClick={() => analyzePortfolio(stocks, marketPrices)} className="mt-6 text-rose-600 font-black uppercase text-[10px] tracking-widest border-b-2 border-rose-200">Réessayer l&apos;analyse</button>
                 </div>
               )}
             </div>
@@ -300,7 +272,7 @@ export default function Dashboard() {
                 <CheckCircle2 size={14} className="text-emerald-500" /> Intelligence artificielle Gemini 2.5 Flash
               </p>
               <button onClick={() => setShowAIModal(false)} className="text-[10px] font-black uppercase tracking-[0.3em] hover:text-slate-900 transition-all">
-                Fermer l'audit
+                Fermer l&apos;audit
               </button>
             </div>
           </div>
@@ -345,7 +317,7 @@ function FlipCard({ item }: { item: AISignal }) {
         <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 rounded-[2.5rem] p-8 md:p-12 flex flex-col justify-center border-2 border-blue-500 shadow-2xl shadow-blue-500/20 text-white">
           <h5 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-6 italic">Justification Mirror AI</h5>
           <p className="text-base md:text-xl font-medium leading-relaxed italic text-slate-200">
-            "{item.justification || item.reason}"
+            &quot;{item.justification || item.reason}&quot;
           </p>
           <div className="mt-8 flex items-center gap-3 text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
             <div className="w-10 h-px bg-blue-900"></div>

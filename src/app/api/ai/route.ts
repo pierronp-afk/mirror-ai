@@ -4,6 +4,14 @@ import { NextResponse } from 'next/server';
  * Route API pour interroger l'IA Gemini.
  * Cette route s'exécute côté serveur pour protéger la clé API.
  */
+interface GeminiResponse {
+  candidates?: {
+    content?: {
+      parts?: { text?: string }[];
+    };
+  }[];
+}
+
 export async function POST(req: Request) {
   // La clé API est fournie par l'environnement d'exécution
   const apiKey = process.env.GEMINI_API_KEY;
@@ -29,7 +37,7 @@ export async function POST(req: Request) {
      * Fonction d'appel avec gestion des réessais (Exponential Backoff)
      * Délais : 1s, 2s, 4s, 8s, 16s
      */
-    const callGeminiWithRetry = async (retries = 5, delay = 1000): Promise<any> => {
+    const callGeminiWithRetry = async (retries = 5, delay = 1000): Promise<GeminiResponse> => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
       const payload = {
@@ -44,7 +52,7 @@ export async function POST(req: Request) {
       });
 
       if (response.ok) {
-        return await response.json();
+        return await response.json() as GeminiResponse;
       }
 
       // Si erreur 429 (Rate Limit) ou 5xx, on réessaie
@@ -53,7 +61,7 @@ export async function POST(req: Request) {
         return callGeminiWithRetry(retries - 1, delay * 2);
       }
 
-      const errorData = await response.json();
+      const errorData = await response.json() as { error?: { message?: string } };
       throw new Error(errorData.error?.message || "Erreur API Gemini");
     };
 
@@ -68,10 +76,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ analysis: text });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Erreur Route API AI:", error);
+    const message = error instanceof Error ? error.message : "Erreur inconnue";
     return NextResponse.json(
-      { error: "Échec de l'analyse IA", message: error.message },
+      { error: "Échec de l'analyse IA", message },
       { status: 500 }
     );
   }
