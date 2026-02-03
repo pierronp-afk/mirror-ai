@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
+import { useMarketData } from '@/hooks/useMarketData';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info
@@ -60,24 +61,15 @@ export default function Dashboard() {
     { symbol: 'TSLA', shares: 15, avgPrice: 210.10 }
   ]);
 
-  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
-  const [showAIModal, setShowAIModal] = useState(false);
+  // Récupération des données réelles du marché
+  // On extrait juste les symboles du portefeuille (AAPL, NVDA, TSLA...)
+  const stockSymbols = useMemo(() => stocks.map(s => s.symbol), [stocks]);
 
-  // Simulation Marché
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setMarketPrices(prev => {
-        const newPrices = { ...prev };
-        stocks.forEach(stock => {
-          const basePrice = prev[stock.symbol] || stock.avgPrice;
-          const change = (Math.random() - 0.5) * 1.5;
-          newPrices[stock.symbol] = Math.max(1, basePrice + change);
-        });
-        return newPrices;
-      });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [stocks]);
+  // Utilisation du hook custom au lieu de la simulation
+  const { prices: marketPrices } = useMarketData(stockSymbols);
+
+  // Note : useMarketData gère déjà le rafraîchissement automatique
+
 
   const totalValue = useMemo(() => {
     return stocks.reduce((acc, s) => acc + (s.shares * (marketPrices[s.symbol] || s.avgPrice)), 0);
@@ -341,7 +333,7 @@ function FlipCard({ item }: { item: AISignal }) {
           </div>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <span className={`px-8 py-4 font-black text-[10px] rounded-2xl uppercase tracking-widest border shadow-lg ${item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                (item.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100')
+              (item.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100')
               }`}>
               {item.rec}
             </span>
