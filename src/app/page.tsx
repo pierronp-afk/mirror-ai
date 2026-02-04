@@ -22,7 +22,7 @@ import {
  */
 
 export default function Dashboard() {
-  const { user, loading: authLoading, loginAnonymously } = useAuth();
+  const { user, loading: authLoading, loginAnonymously, logout } = useAuth();
   const { analyzePortfolio, analysis, isAnalyzing, error: aiError } = useAI();
 
   const [stocks] = useState<Stock[]>([
@@ -96,8 +96,19 @@ export default function Dashboard() {
               <Bell size={20} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
             </button>
-            <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden text-slate-900">
-              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 leading-none">Anonyme</p>
+                <button
+                  onClick={() => logout()}
+                  className="text-[9px] font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 transition-colors"
+                >
+                  Déconnexion
+                </button>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
+                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
+              </div>
             </div>
           </div>
         </div>
