@@ -20,6 +20,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Configuration serveur manquante : GEMINI_API_KEY introuvable." }, { status: 500 });
   }
 
+  // Debug sécurisé (affiche juste la fin de la clé dans la console du serveur)
+  console.log(`📡 Appel API IA avec la clé se terminant par : ...${apiKey.slice(-4)}`);
+
   try {
     const { prompt } = await req.json();
 
@@ -37,13 +40,19 @@ export async function POST(req: Request) {
      * Fonction d'appel avec gestion des réessais (Exponential Backoff)
      * Délais : 1s, 2s, 4s, 8s, 16s
      */
-    const callGeminiWithRetry = async (retries = 5, delay = 1000): Promise<GeminiResponse> => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+    const callGeminiWithRetry = async (retries = 3, delay = 1000): Promise<GeminiResponse> => {
+      // Retour à Gemini 1.5 Flash (plus stable et quotas plus larges)
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
       const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] }
+        contents: [{
+          parts: [{
+            text: `${systemPrompt}\n\nDOSSIER PATRIMOINE :\n${prompt}`
+          }]
+        }]
       };
+
+      console.log("🚀 Envoi de l'analyse au moteur Mirror AI (Gemini 1.5)...");
 
       const response = await fetch(url, {
         method: 'POST',
@@ -55,14 +64,23 @@ export async function POST(req: Request) {
         return await response.json() as GeminiResponse;
       }
 
-      // Si erreur 429 (Rate Limit) ou 5xx, on réessaie
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: { message: errorText } };
+      }
+
+      // On log l'erreur mais SANS la clé API (déjà supprimée par l'URL ci-dessus si on ne logue pas l'url complète)
+      console.error(`❌ Erreur Mirror AI (${response.status}):`, errorData.error?.message || "Erreur inconnue");
+
       if ((response.status === 429 || response.status >= 500) && retries > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
         return callGeminiWithRetry(retries - 1, delay * 2);
       }
 
-      const errorData = await response.json() as { error?: { message?: string } };
-      throw new Error(errorData.error?.message || "Erreur API Gemini");
+      throw new Error(errorData.error?.message || `Erreur Mirror AI (${response.status})`);
     };
 
     const data = await callGeminiWithRetry();

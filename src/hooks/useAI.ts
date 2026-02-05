@@ -50,10 +50,21 @@ export function useAI() {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || data.error || "L'IA est momentanément indisponible.");
+        return;
+      }
+
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
-      if (jsonMatch) setAnalysis(JSON.parse(jsonMatch[0]) as AIAnalysis);
-    } catch {
-      setError("L'IA est momentanément indisponible.");
+      if (jsonMatch) {
+        setAnalysis(JSON.parse(jsonMatch[0]) as AIAnalysis);
+      } else {
+        setError("L'IA n'a pas renvoyé le format attendu.");
+      }
+    } catch (err: any) {
+      console.error("Erreur hook useAI:", err);
+      setError("Erreur de connexion avec le serveur.");
     } finally {
       setIsAnalyzing(false);
     }

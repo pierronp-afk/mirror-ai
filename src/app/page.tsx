@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
 import { useMarketData } from '@/hooks/useMarketData';
 import { Stock, AISignal } from '@/types';
+import AddStockModal from '@/components/AddStockModal';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info
@@ -22,16 +23,17 @@ import {
  */
 
 export default function Dashboard() {
-  const { user, loading: authLoading, loginAnonymously, loginWithGoogle, logout } = useAuth();
+  const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
   const { analyzePortfolio, analysis, isAnalyzing, error: aiError } = useAI();
 
-  const [stocks] = useState<Stock[]>([
+  const [stocks, setStocks] = useState<Stock[]>([
     { symbol: 'AAPL', shares: 10, avgPrice: 175.50 },
     { symbol: 'NVDA', shares: 5, avgPrice: 450.25 },
     { symbol: 'TSLA', shares: 15, avgPrice: 210.10 }
   ]);
 
   const [showAIModal, setShowAIModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Récupération des données réelles du marché
   // On extrait juste les symboles du portefeuille (AAPL, NVDA, TSLA...)
@@ -42,6 +44,14 @@ export default function Dashboard() {
 
   // Note : useMarketData gère déjà le rafraîchissement automatique
 
+  const handleAddStock = (symbol: string, shares: number, avgPrice: number) => {
+    const newStock: Stock = { symbol, shares, avgPrice };
+    setStocks([...stocks, newStock]);
+  };
+
+  const handleRemoveStock = (symbol: string) => {
+    setStocks(stocks.filter(s => s.symbol !== symbol));
+  };
 
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -71,15 +81,10 @@ export default function Dashboard() {
       setIsLoggingIn(true);
       setLoginError(null);
       try {
+        // La redirection va se faire automatiquement
         await loginWithGoogle();
       } catch (error: any) {
-        if (error.code === 'auth/popup-closed-by-user') {
-          setLoginError('Connexion annulée');
-        } else if (error.code === 'auth/popup-blocked') {
-          setLoginError('Popup bloquée par le navigateur. Veuillez autoriser les popups.');
-        } else {
-          setLoginError('Erreur de connexion. Veuillez réessayer.');
-        }
+        setLoginError('Erreur de connexion. Veuillez réessayer.');
         setIsLoggingIn(false);
       }
     };
@@ -102,6 +107,21 @@ export default function Dashboard() {
         </div>
         <h1 className="text-4xl font-black tracking-tighter uppercase italic mb-4">Mirror<span className="text-blue-600">AI</span></h1>
         <p className="text-slate-500 mb-8 max-w-sm">Connectez-vous pour commencer à tracker votre patrimoine avec l&apos;aide de l&apos;IA.</p>
+
+        {authError && (
+          <div className="mb-6 bg-amber-50 border-2 border-amber-300 text-amber-900 px-6 py-4 rounded-2xl text-sm font-bold max-w-2xl">
+            <p className="font-black text-base mb-2">⚠️ Configuration Firebase requise</p>
+            <p className="mb-3">{authError}</p>
+            <a
+              href="https://console.firebase.google.com/project/mirror-intelligence-c68c9/authentication/providers"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors text-xs font-black uppercase"
+            >
+              Ouvrir Firebase Console
+            </a>
+          </div>
+        )}
 
         {loginError && (
           <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-600 px-6 py-3 rounded-2xl text-sm font-bold max-w-md">
@@ -162,7 +182,9 @@ export default function Dashboard() {
             </button>
             <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
               <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 leading-none">Anonyme</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 leading-none truncate max-w-[150px]">
+                  {user.isAnonymous ? 'Anonyme' : (user.displayName || user.email?.split('@')[0] || 'Utilisateur')}
+                </p>
                 <button
                   onClick={() => logout()}
                   className="text-[9px] font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 transition-colors"
@@ -170,8 +192,12 @@ export default function Dashboard() {
                   Déconnexion
                 </button>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
+              <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} alt="avatar" />
+                )}
               </div>
             </div>
           </div>
@@ -219,7 +245,10 @@ export default function Dashboard() {
               <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Positions Actuelles</h3>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Géré en temps réel</p>
             </div>
-            <button className="bg-white border border-slate-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 text-slate-900">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-white border border-slate-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 text-slate-900"
+            >
               <Plus size={14} /> Ajouter un actif
             </button>
           </div>
@@ -241,7 +270,12 @@ export default function Dashboard() {
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stock.shares} titres</p>
                       </div>
                     </div>
-                    <button className="p-2 text-slate-200 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
+                    <button
+                      onClick={() => handleRemoveStock(stock.symbol)}
+                      className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                   <div className="flex justify-between items-end">
                     <p className="text-2xl font-black text-slate-900">{(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
@@ -345,6 +379,14 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL AJOUT D'ACTION */}
+      {showAddModal && (
+        <AddStockModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddStock}
+        />
       )}
     </div>
   );
