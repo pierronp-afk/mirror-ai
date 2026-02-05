@@ -34,17 +34,29 @@ export async function GET(req: Request) {
     try {
         const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
 
+        const data = await response.json() as any;
+
         if (!response.ok) {
+            // Log specifically if rate limited
+            if (response.status === 429 || (data.error && data.error.includes("limit reached"))) {
+                console.warn(`⚠️  Ratio limite atteint pour ${symbol}`);
+                return NextResponse.json({
+                    error: "Limite API atteinte",
+                    symbol: symbol,
+                    c: 0, // Fallback price
+                    limited: true
+                }, { status: 429 });
+            }
             throw new Error(`Finnhub API Error: ${response.statusText}`);
         }
 
-        const data = await response.json() as FinnhubQuote;
         // Finnhub response format for quote: { c: current price, d: change, dp: percent change, ... }
         return NextResponse.json(data);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Erreur inconnue";
+        console.error(`❌ Erreur /api/market pour ${symbol}:`, message);
         return NextResponse.json(
-            { error: "Erreur lors de la récupération des données de marché", details: message },
+            { error: "Erreur lors de la récupération des données de marché", details: message, symbol },
             { status: 500 }
         );
     }

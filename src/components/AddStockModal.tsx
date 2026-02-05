@@ -11,7 +11,7 @@ interface StockSearchResult {
 
 interface AddStockModalProps {
     onClose: () => void;
-    onAdd: (symbol: string, shares: number, avgPrice: number) => void;
+    onAdd: (symbol: string, shares: number, avgPrice: number, name?: string) => void;
 }
 
 export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
@@ -95,7 +95,7 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
             return;
         }
 
-        onAdd(selectedStock.symbol, sharesNum, priceNum);
+        onAdd(selectedStock.symbol, sharesNum, priceNum, selectedStock.description);
         onClose();
     };
 
@@ -177,7 +177,7 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
                     {/* Shares Input */}
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
-                            Nombre d'actions
+                            Nombre d&apos;actions
                         </label>
                         <input
                             type="number"

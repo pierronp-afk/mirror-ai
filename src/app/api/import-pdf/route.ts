@@ -34,13 +34,21 @@ export async function POST(req: NextRequest) {
             TA MISSION :
             1. Analyse le document PDF.
             2. Identifie tous les titres boursiers (actions, ETF).
-            3. Pour chaque titre, trouve le Symbole (Ticker comme AAPL, TSLA, MC.PA, etc.) et la Quantité détenue.
-            4. Retourne UNIQUEMENT un tableau JSON d'objets avec les clés "symbol" (string) et "shares" (number).
+            3. Pour chaque titre, trouve :
+               - Le Nom de l'entreprise (ex: "Apple Inc", "Tesla Motors", "LVMH")
+               - Le Symbole / Ticker (ex: AAPL, TSLA, MC.PA, etc.)
+               - La Quantité détenue (nombre de titres)
+            4. Retourne UNIQUEMENT un tableau JSON d'objets avec les clés "symbol" (string), "name" (string) et "shares" (number).
+
+            RÈGLES CRITIQUES :
+            - Pour le 'name', prends la première ligne descriptive de la position.
+            - Pour le 'symbol', assure-toi qu'il correspond au code boursier.
+            - Pour 'shares', assure-toi que c'est un nombre (utilises le point pour les décimales).
 
             FORMAT DE RÉPONSE ATTENDU :
             [
-                {"symbol": "AAPL", "shares": 10},
-                {"symbol": "MSFT", "shares": 5.5}
+                {"symbol": "AAPL", "name": "Apple Inc", "shares": 10},
+                {"symbol": "MC.PA", "name": "LVMH", "shares": 5.5}
             ]
         `;
 

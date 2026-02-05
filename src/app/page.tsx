@@ -4,12 +4,15 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
 import { useMarketData } from '@/hooks/useMarketData';
+import { usePortfolio } from '@/hooks/usePortfolio';
 import { Stock, AISignal } from '@/types';
 import AddStockModal from '@/components/AddStockModal';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
-  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload
+  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload, Clock, Target, Rocket
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import StockCard from '@/components/StockCard';
 
 // Les interfaces & types sont maintenant importés depuis @/types
 
@@ -24,13 +27,12 @@ import {
 
 export default function Dashboard() {
   const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
-  const { analyzePortfolio, analysis, isAnalyzing, error: aiError } = useAI();
+  const { analyzePortfolio, askQuestion, analysis, isAnalyzing, error: aiError } = useAI();
+  const [question, setQuestion] = useState("");
+  const [isAsking, setIsAsking] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{ q: string; a: string }[]>([]);
 
-  const [stocks, setStocks] = useState<Stock[]>([
-    { symbol: 'AAPL', shares: 10, avgPrice: 175.50 },
-    { symbol: 'NVDA', shares: 5, avgPrice: 450.25 },
-    { symbol: 'TSLA', shares: 15, avgPrice: 210.10 }
-  ]);
+  const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
 
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,13 +48,12 @@ export default function Dashboard() {
 
   // Note : useMarketData gère déjà le rafraîchissement automatique
 
-  const handleAddStock = (symbol: string, shares: number, avgPrice: number) => {
-    const newStock: Stock = { symbol, shares, avgPrice };
-    setStocks([...stocks, newStock]);
+  const handleAddStock = (symbol: string, shares: number, avgPrice: number, name?: string) => {
+    addStock({ symbol, shares, avgPrice, name });
   };
 
   const handleRemoveStock = (symbol: string) => {
-    setStocks(stocks.filter(s => s.symbol !== symbol));
+    removeStock(symbol);
   };
 
   const handleImportPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,45 +79,39 @@ export default function Dashboard() {
       }
 
       const data = await res.json();
-      const importedStocks = data.stocks as { symbol: string, shares: number }[];
+      const importedStocks = data.stocks as { symbol: string, name: string, shares: number }[];
 
       if (importedStocks && importedStocks.length > 0) {
+        // MAJ DU PORTFOLIO : On remplace tout par l'import PDF
         // On récupère les prix actuels pour ces nouveaux titres
         const symbolsToFetch = importedStocks.map(s => s.symbol);
         const pricesRes = await Promise.all(
           symbolsToFetch.map(async (s) => {
-            const r = await fetch(`/api/market?symbol=${s}`);
-            const d = await r.json();
-            return { symbol: s, price: d.c || 0 };
+            try {
+              const r = await fetch(`/api/market?symbol=${s}`);
+              if (!r.ok) return { symbol: s, price: 0 };
+              const d = await r.json();
+              return { symbol: s, price: d.c || 0 };
+            } catch {
+              return { symbol: s, price: 0 };
+            }
           })
         );
 
         const newMarketPrices = Object.fromEntries(pricesRes.map(p => [p.symbol, p.price]));
 
-        setStocks(prev => {
-          const updated = [...prev];
-          importedStocks.forEach(imported => {
-            const existingIdx = updated.findIndex(s => s.symbol === imported.symbol);
-            const price = newMarketPrices[imported.symbol] || imported.shares; // Fallback
-
-            if (existingIdx > -1) {
-              // Remplacer si déjà existant
-              updated[existingIdx] = {
-                ...updated[existingIdx],
-                shares: imported.shares,
-                avgPrice: price // On met à jour le prix d'achat au prix actuel lors de l'import
-              };
-            } else {
-              // Ajouter si nouveau
-              updated.push({
-                symbol: imported.symbol,
-                shares: imported.shares,
-                avgPrice: price
-              });
-            }
-          });
-          return updated;
+        // On crée la nouvelle liste de titres (Full Sync)
+        const updated = importedStocks.map(imported => {
+          const price = newMarketPrices[imported.symbol] || 0;
+          return {
+            symbol: imported.symbol,
+            shares: imported.shares,
+            avgPrice: price, // Utilise le prix Finnhub ou 0 (pas la quantité !)
+            name: imported.name || imported.symbol
+          };
         });
+
+        setStocks(updated);
       }
     } catch (err: any) {
       console.error('Import error:', err);
@@ -131,7 +126,7 @@ export default function Dashboard() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const totalValue = useMemo(() => {
-    return stocks.reduce((acc, s) => acc + (s.shares * (marketPrices[s.symbol] || s.avgPrice)), 0);
+    return stocks.reduce((acc, s) => acc + (s.shares * (marketPrices[s.symbol]?.price || s.avgPrice)), 0);
   }, [stocks, marketPrices]);
 
   const totalCost = useMemo(() => {
@@ -141,7 +136,7 @@ export default function Dashboard() {
   const totalGain = totalValue - totalCost;
   const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-  if (authLoading) return (
+  if (authLoading || portfolioLoading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <div className="flex flex-col items-center gap-4">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -312,6 +307,53 @@ export default function Dashboard() {
           </button>
         </section>
 
+        {/* GRAPHIQUE DE PILOTAGE */}
+        {analysis?.forecast && (
+          <section className="bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Pilotage & Prévisions</h3>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Projection basée sur l&apos;analyse Mirror AI</p>
+              </div>
+              <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase">
+                Horizon 30 Jours
+              </div>
+            </div>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analysis.forecast}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="date"
+                    hide
+                  />
+                  <YAxis
+                    hide
+                    domain={['auto', 'auto']}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#2563eb"
+                    strokeWidth={4}
+                    fillOpacity={1}
+                    fill="url(#colorValue)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+
         {/* LISTE ACTIFS */}
         <section className="space-y-6">
           <div className="flex justify-between items-end px-4 flex-wrap gap-4">
@@ -347,39 +389,61 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stocks.map((stock) => {
-              const currentPrice = marketPrices[stock.symbol] || stock.avgPrice;
-              const gain = (currentPrice - stock.avgPrice) * stock.shares;
-              const isPos = gain >= 0;
-              return (
-                <div key={stock.symbol} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 hover:shadow-2xl transition-all duration-500 group">
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center font-black text-slate-400 group-hover:text-blue-600 transition-colors">
-                        {stock.symbol}
+            {stocks.map((stock) => (
+              <StockCard
+                key={stock.symbol}
+                stock={stock}
+                marketData={marketPrices[stock.symbol]}
+                aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
+              />
+            ))}
+          </div>
+
+          {/* OPPORTUNITÉS */}
+          {analysis?.opportunities && (
+            <div className="mt-20 space-y-8">
+              <div className="flex items-center gap-4">
+                <div className="bg-slate-900 p-3 rounded-2xl">
+                  <Rocket className="text-white w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Opportunités Significatives</h3>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Détectées par l&apos;IA hors portefeuille</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {analysis.opportunities.map((opp, i) => (
+                  <div key={i} className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl transition-all group">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors">
+                        {opp.symbol[0]}
                       </div>
+                      <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${opp.horizon === 'FUSIL' ? 'bg-rose-100 text-rose-600' :
+                        opp.horizon === 'LONG' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                        }`}>
+                        {opp.horizon}
+                      </span>
+                    </div>
+                    <h4 className="text-xl font-black tracking-tighter mb-1">{opp.symbol}</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 truncate">{opp.name}</p>
+                    <p className="text-xs text-slate-500 mb-6 italic line-clamp-2">&quot;{opp.reason}&quot;</p>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
                       <div>
-                        <p className="font-black text-xl tracking-tight text-slate-900">{stock.symbol}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stock.shares} titres</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Prix Max Achat</p>
+                        <p className="text-sm font-black text-slate-900">{opp.priceMax}€</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Sortie Visée</p>
+                        <p className="text-sm font-black text-emerald-500">{opp.priceExit}€</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleRemoveStock(stock.symbol)}
-                      className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
                   </div>
-                  <div className="flex justify-between items-end">
-                    <p className="text-2xl font-black text-slate-900">{(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-                    <p className={`text-sm font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {isPos ? '+' : ''}{gain.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
 
@@ -406,6 +470,51 @@ export default function Dashboard() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-12">
+              <div className="bg-blue-600/5 border border-blue-600/10 rounded-[2rem] p-6 mb-8 flex flex-col gap-4">
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic">Poser une question à Mirror AI</p>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Ex: Quelles opportunités sur le secteur de la tech ?"
+                    className="flex-1 bg-white border border-slate-200 rounded-2xl px-6 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-slate-800"
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter' && question.trim() && !isAsking) {
+                        setIsAsking(true);
+                        const ans = await askQuestion(question);
+                        setChatHistory(prev => [{ q: question, a: ans }, ...prev]);
+                        setQuestion("");
+                        setIsAsking(false);
+                      }
+                    }}
+                  />
+                  <button
+                    disabled={isAsking || !question.trim()}
+                    onClick={async () => {
+                      setIsAsking(true);
+                      const ans = await askQuestion(question);
+                      setChatHistory(prev => [{ q: question, a: ans }, ...prev]);
+                      setQuestion("");
+                      setIsAsking(false);
+                    }}
+                    className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors disabled:opacity-50"
+                  >
+                    {isAsking ? "..." : "Interroger"}
+                  </button>
+                </div>
+
+                {chatHistory.length > 0 && (
+                  <div className="mt-4 space-y-4 max-h-60 overflow-y-auto pr-2">
+                    {chatHistory.map((chat, i) => (
+                      <div key={i} className="bg-white/50 border border-slate-100 rounded-2xl p-4">
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Q: {chat.q}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed italic">&quot;{chat.a}&quot;</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               {isAnalyzing ? (
                 <div className="flex flex-col items-center justify-center h-64 space-y-4">
                   <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>

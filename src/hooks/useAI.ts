@@ -15,30 +15,46 @@ export function useAI() {
       : "Portefeuille vide.";
 
     const prompt = `
-      MISSION : Expert Mirror AI. Audit complet du portefeuille : ${portfolioContext}.
+      MISSION : Expert Mirror AI. Audit institutionnel du portefeuille : ${portfolioContext}.
       
       INSTRUCTIONS :
-      - Analyse santé + conseils (Renforcer, Alléger, Conserver).
-      - Identifie 2 opportunités hors portefeuille.
-      - CHAQUE conseil doit avoir une justification textuelle courte mais percutante (max 150 caractères).
+      - Rapporte la santé globale et une projection à 3 mois réaliste (même si négative).
+      - Pour CHAQUE titre du portefeuille, génère un signal détaillé conforme au format JSON ci-dessous.
+      - Ajoute une section 'opportunities' avec 3-4 titres hors portefeuille (LONG, MEDIUM, SHORT, FUSIL).
+      - Inclus une courbe prévisionnelle ('forecast') sur 30 jours (tableau d'objets {date: string, value: number}).
 
       RÉPONSE STRICTE JSON :
       {
-        "health": "MOT",
-        "healthDesc": "Synthèse",
+        "health": "TERME_FINANCIER",
+        "healthDesc": "Synthèse technique",
         "prediction": "+XX%",
-        "predictionDesc": "Tendance",
+        "predictionDesc": "Détails macro",
         "signals": [
           {
-            "name": "Ticker",
+            "symbol": "TICKER",
+            "name": "Nom",
             "reason": "Argument court",
-            "justification": "Explication détaillée du 'Pourquoi' incluant l'actu ou les fondamentaux",
-            "rec": "ACTION",
+            "justification": "Détails fondamentaux / actu",
+            "rec": "CONSEIL",
             "urgency": "HAUTE/MODÉRÉE/FAIBLE",
-            "color": "rose/emerald/blue"
+            "color": "rose/emerald/blue",
+            "advice": "Vendre/Renforcer/...",
+            "targetPrice": 0,
+            "stopLoss": 0
           }
         ],
-        "newsHighlight": "Titre actu"
+        "opportunities": [
+            {
+                "symbol": "TICKER",
+                "name": "Nom",
+                "horizon": "LONG/MEDIUM/SHORT/FUSIL",
+                "reason": "Pourquoi ce titre ?",
+                "priceMax": 0,
+                "priceExit": 0
+            }
+        ],
+        "newsHighlight": "Titre actu",
+        "forecast": [{"date": "ISO", "value": 0}]
       }
     `;
 
@@ -62,7 +78,7 @@ export function useAI() {
       } else {
         setError("L'IA n'a pas renvoyé le format attendu.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erreur hook useAI:", err);
       setError("Erreur de connexion avec le serveur.");
     } finally {
@@ -70,5 +86,24 @@ export function useAI() {
     }
   };
 
-  return { analyzePortfolio, analysis, isAnalyzing, error };
+  const askQuestion = async (question: string): Promise<string> => {
+    try {
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `QUESTION UTILISATEUR : ${question}\n\nContexte portefeuille : ${JSON.stringify(analysis)}\n\nRéponds de manière technique et sérieuse. Si pertinent, propose des titres en lien.`
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Erreur IA");
+      return data.analysis;
+    } catch (err: unknown) {
+      console.error("Erreur askQuestion:", err);
+      return "Une erreur est survenue lors de la génération de la réponse.";
+    }
+  };
+
+  return { analyzePortfolio, askQuestion, analysis, isAnalyzing, error };
 }
