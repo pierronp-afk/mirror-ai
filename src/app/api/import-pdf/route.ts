@@ -3,9 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-    // Dynamic require to avoid build-time errors with DOMMatrix (browser globals)
-    const pdf = require('pdf-parse');
-
     try {
         const formData = await req.formData();
         const file = formData.get('file') as File;
@@ -15,33 +12,23 @@ export async function POST(req: NextRequest) {
         }
 
         const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
+        const base64Data = Buffer.from(bytes).toString('base64');
 
-        // Extraction du texte du PDF
-        const pdfData = await pdf(buffer);
-        const extractedText = pdfData.text;
-
-        if (!extractedText || extractedText.trim().length === 0) {
-            return NextResponse.json({ error: "Impossible de lire le contenu du PDF" }, { status: 400 });
-        }
-
-        // Utilisation de Gemini pour parser le texte et extraire les actifs
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return NextResponse.json({ error: "GEMINI_API_KEY non configurée" }, { status: 500 });
         }
 
+        // Prompt pour l'analyse PDF directe par l'IA
+        // Gemini 1.5 Flash supporte l'envoi direct de PDF via inline_data
         const prompt = `
             Tu es un extracteur de données financières expert.
-            Voici le texte extrait d'un relevé de compte titres :
-            \"\"\"
-            ${extractedText}
-            \"\"\"
-
+            Le document PDF joint est un relevé de compte titres.
+            
             TA MISSION :
-            1. Identifie tous les titres boursiers (actions, ETF).
-            2. Pour chaque titre, trouve le Symbole (Ticker comme AAPL, TSLA, MC.PA, etc.) et la Quantité détenue.
-            3. Si le symbole n'est pas explicite, essaie de le déduire du nom de la société.
+            1. Analyse le document PDF.
+            2. Identifie tous les titres boursiers (actions, ETF).
+            3. Pour chaque titre, trouve le Symbole (Ticker comme AAPL, TSLA, MC.PA, etc.) et la Quantité détenue.
             4. Retourne UNIQUEMENT un tableau JSON d'objets avec les clés "symbol" (string) et "shares" (number).
 
             FORMAT DE RÉPONSE ATTENDU :
@@ -57,7 +44,19 @@ export async function POST(req: NextRequest) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [{
+                    parts: [
+                        {
+                            inline_data: {
+                                mime_type: "application/pdf",
+                                data: base64Data
+                            }
+                        },
+                        {
+                            text: prompt
+                        }
+                    ]
+                }]
             })
         });
 
@@ -69,6 +68,10 @@ export async function POST(req: NextRequest) {
 
         const data = await response.json();
         const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!aiResponse) {
+            return NextResponse.json({ error: "L'IA n'a renvoyé aucun contenu" }, { status: 500 });
+        }
 
         // Extraction du JSON de la réponse texte
         const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
