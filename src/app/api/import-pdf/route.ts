@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
             ]
         `;
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(geminiUrl, {
             method: 'POST',
@@ -62,8 +62,11 @@ export async function POST(req: NextRequest) {
 
         if (!response.ok) {
             const error = await response.json();
-            console.error("Gemini Error:", error);
-            return NextResponse.json({ error: "L'IA n'a pas pu analyser le document" }, { status: 500 });
+            console.error("Gemini Raw Error:", JSON.stringify(error, null, 2));
+            return NextResponse.json({
+                error: "L'IA n'a pas pu analyser le document",
+                geminiError: error
+            }, { status: 500 });
         }
 
         const data = await response.json();
