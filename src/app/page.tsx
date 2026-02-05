@@ -9,9 +9,13 @@ import { Stock, AISignal } from '@/types';
 import AddStockModal from '@/components/AddStockModal';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
-  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload, Clock, Target, Rocket
+  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload, Clock, Target, Rocket,
+  PieChart as PieChartIcon, BarChart3, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, PieChart, Pie, Cell
+} from 'recharts';
 import StockCard from '@/components/StockCard';
 
 // Les interfaces & types sont maintenant importés depuis @/types
@@ -26,27 +30,24 @@ import StockCard from '@/components/StockCard';
  */
 
 export default function Dashboard() {
+  const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
   const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
   const { analyzePortfolio, askQuestion, analysis, isAnalyzing, error: aiError } = useAI();
-  const [question, setQuestion] = useState("");
-  const [isAsking, setIsAsking] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{ q: string; a: string }[]>([]);
-
-  const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
 
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ q: string; a: string }[]>([]);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Récupération des données réelles du marché
-  // On extrait juste les symboles du portefeuille (AAPL, NVDA, TSLA...)
   const stockSymbols = useMemo(() => stocks.map(s => s.symbol), [stocks]);
-
-  // Utilisation du hook custom au lieu de la simulation
   const { prices: marketPrices } = useMarketData(stockSymbols);
-
-  // Note : useMarketData gère déjà le rafraîchissement automatique
 
   const handleAddStock = (symbol: string, shares: number, avgPrice: number, name?: string) => {
     addStock({ symbol, shares, avgPrice, name });
@@ -61,7 +62,7 @@ export default function Dashboard() {
     if (!file) return;
 
     setIsImporting(true);
-    setLoginError(null); // Réutilisation pour afficher d'éventuelles erreurs d'import
+    setLoginError(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -74,16 +75,13 @@ export default function Dashboard() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error('❌ Détails erreur serveur Mirror AI:', errorData);
         throw new Error(errorData.error || 'Échec de l\'analyse du PDF');
       }
 
       const data = await res.json();
-      const importedStocks = data.stocks as { symbol: string, name: string, shares: number }[];
+      const importedStocks = data.stocks as { symbol: string, name: string, shares: number, sector?: string }[];
 
       if (importedStocks && importedStocks.length > 0) {
-        // MAJ DU PORTFOLIO : On remplace tout par l'import PDF
-        // On récupère les prix actuels pour ces nouveaux titres
         const symbolsToFetch = importedStocks.map(s => s.symbol);
         const pricesRes = await Promise.all(
           symbolsToFetch.map(async (s) => {
@@ -100,30 +98,29 @@ export default function Dashboard() {
 
         const newMarketPrices = Object.fromEntries(pricesRes.map(p => [p.symbol, p.price]));
 
-        // On crée la nouvelle liste de titres (Full Sync)
-        const updated = importedStocks.map(imported => {
-          const price = newMarketPrices[imported.symbol] || 0;
-          return {
-            symbol: imported.symbol,
-            shares: imported.shares,
-            avgPrice: price, // Utilise le prix Finnhub ou 0 (pas la quantité !)
-            name: imported.name || imported.symbol
-          };
-        });
+        const updated = importedStocks
+          .filter(s => s.symbol && s.symbol.trim() !== "" && !s.symbol.includes("?") && s.symbol.toUpperCase() !== "UNKNOWN")
+          .map(imported => {
+            const price = newMarketPrices[imported.symbol] || 0;
+            return {
+              symbol: imported.symbol.toUpperCase(),
+              shares: imported.shares,
+              avgPrice: price,
+              name: imported.name || imported.symbol,
+              sector: imported.sector
+            };
+          });
 
         setStocks(updated);
       }
     } catch (err: any) {
       console.error('Import error:', err);
-      setLoginError("Erreur lors de l'import PDF. Vérifiez le format du fichier.");
+      setLoginError("Erreur lors de l'import PDF : " + err.message);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
-
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const totalValue = useMemo(() => {
     return stocks.reduce((acc, s) => acc + (s.shares * (marketPrices[s.symbol]?.price || s.avgPrice)), 0);
@@ -135,6 +132,45 @@ export default function Dashboard() {
 
   const totalGain = totalValue - totalCost;
   const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+
+  // Calcul de l'allocation sectorielle (Manuelle pour l'instant)
+  const sectorMapping: Record<string, string> = {
+    'AAPL': 'Technologie', 'MSFT': 'Technologie', 'NVDA': 'Semi-conducteurs',
+    'GOOGL': 'Services Comm.', 'GOOG': 'Services Comm.', 'AMZN': 'Conso. Discrétionnaire',
+    'META': 'Services Comm.', 'TSLA': 'Automobile', 'MC.PA': 'Luxe',
+    'OR.PA': 'Luxe', 'TTE.PA': 'Énergie', 'AIR.PA': 'Aéronautique',
+    'SAN.PA': 'Santé', 'BNP.PA': 'Banque', 'GLE.PA': 'Banque',
+    'ASML': 'Semi-conducteurs', 'SAP': 'Technologie'
+  };
+
+  const allocationData = useMemo(() => {
+    const sectors: Record<string, number> = {};
+    stocks.forEach(s => {
+      const sector = s.sector || sectorMapping[s.symbol.toUpperCase()] || 'Autres';
+      const value = s.shares * (marketPrices[s.symbol]?.price || s.avgPrice);
+      sectors[sector] = (sectors[sector] || 0) + value;
+    });
+    return Object.entries(sectors).map(([name, value]) => ({ name, value }));
+  }, [stocks, marketPrices]);
+
+  const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+
+  const performanceStats = useMemo(() => {
+    if (stocks.length === 0) return null;
+    let best = stocks[0];
+    let worst = stocks[0];
+    let maxGain = -Infinity;
+    let minGain = Infinity;
+
+    stocks.forEach(s => {
+      const current = marketPrices[s.symbol]?.price || s.avgPrice;
+      const gainP = ((current - s.avgPrice) / s.avgPrice) * 100;
+      if (gainP > maxGain) { maxGain = gainP; best = s; }
+      if (gainP < minGain) { minGain = gainP; worst = s; }
+    });
+
+    return { best, worst, maxGain, minGain };
+  }, [stocks, marketPrices]);
 
   if (authLoading || portfolioLoading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -274,9 +310,22 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 mt-10 space-y-10">
+        {loginError && (
+          <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2rem] flex justify-between items-center animate-in slide-in-from-top duration-500">
+            <div className="flex items-center gap-4">
+              <div className="bg-rose-500 p-2 rounded-xl text-white">
+                <AlertCircle size={20} />
+              </div>
+              <p className="text-sm font-bold text-rose-900">{loginError}</p>
+            </div>
+            <button onClick={() => setLoginError(null)} className="text-rose-400 hover:text-rose-600 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+        )}
 
         {/* KPI DASHBOARD */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform duration-700">
               <Activity size={180} />
@@ -293,6 +342,24 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <div className="bg-white rounded-[3rem] p-8 shadow-xl shadow-slate-200/40 border border-white flex flex-col justify-between group">
+            <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 italic">Top Performance</p>
+            {performanceStats ? (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-2xl font-black tracking-tighter text-slate-900">{performanceStats.best.symbol}</h4>
+                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <ArrowUpRight size={20} />
+                  </div>
+                </div>
+                <p className="text-3xl font-black text-emerald-500">+{performanceStats.maxGain.toFixed(1)}%</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">{performanceStats.best.name}</p>
+              </div>
+            ) : (
+              <p className="text-slate-300 font-bold italic">Aucune donnée</p>
+            )}
+          </div>
+
           <button
             onClick={() => { setShowAIModal(true); analyzePortfolio(stocks, marketPrices); }}
             className="bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
@@ -307,9 +374,56 @@ export default function Dashboard() {
           </button>
         </section>
 
-        {/* GRAPHIQUE DE PILOTAGE */}
-        {analysis?.forecast && (
-          <section className="bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
+        {/* ANALYTICS SECTION */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ALLOCATION SECTORIELLE */}
+          <div className="bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Allocation Actifs</h3>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Par secteur d&apos;activité</p>
+              </div>
+              <PieChartIcon className="text-blue-600" size={24} />
+            </div>
+            <div className="h-[250px] w-full flex items-center justify-center">
+              {allocationData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={allocationData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {allocationData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '1rem' }}
+                      itemStyle={{ fontWeight: '800', fontSize: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-slate-300 font-bold italic">Portefeuille vide</p>
+              )}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3 justify-center">
+              {allocationData.map((entry, index) => (
+                <div key={index} className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-[9px] font-black uppercase text-slate-600">{entry.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* GRAPHIQUE DE PILOTAGE */}
+          <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Pilotage & Prévisions</h3>
@@ -319,40 +433,32 @@ export default function Dashboard() {
                 Horizon 30 Jours
               </div>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={analysis.forecast}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="date"
-                    hide
-                  />
-                  <YAxis
-                    hide
-                    domain={['auto', 'auto']}
-                  />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#2563eb"
-                    strokeWidth={4}
-                    fillOpacity={1}
-                    fill="url(#colorValue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-[250px] w-full">
+              {analysis?.forecast ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={analysis.forecast}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" hide />
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                    <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-50 rounded-[2rem]">
+                  <BarChart3 size={40} className="mb-2 opacity-50" />
+                  <p className="font-bold italic">Audit requis pour projection</p>
+                </div>
+              )}
             </div>
-          </section>
-        )}
+          </div>
+        </section>
 
         {/* LISTE ACTIFS */}
         <section className="space-y-6">
@@ -395,6 +501,7 @@ export default function Dashboard() {
                 stock={stock}
                 marketData={marketPrices[stock.symbol]}
                 aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
+                onRemove={handleRemoveStock}
               />
             ))}
           </div>
@@ -557,7 +664,7 @@ export default function Dashboard() {
                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic px-2">Recommandations & Opportunités</h5>
                     <div className="grid grid-cols-1 gap-8">
                       {analysis.signals.map((item, i) => (
-                        <FlipCard key={i} item={item} />
+                        <RecommendationCard key={i} item={item} />
                       ))}
                     </div>
                   </div>
@@ -573,7 +680,7 @@ export default function Dashboard() {
 
             <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row gap-4 justify-between items-center text-slate-400">
               <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-emerald-500" /> Intelligence artificielle Gemini 2.5 Flash
+                <CheckCircle2 size={14} className="text-emerald-500" /> Intelligence artificielle Gemini 1.5 Flash
               </p>
               <button onClick={() => setShowAIModal(false)} className="text-[10px] font-black uppercase tracking-[0.3em] hover:text-slate-900 transition-all">
                 Fermer l&apos;audit
@@ -595,9 +702,9 @@ export default function Dashboard() {
 }
 
 /**
- * --- COMPOSANT : CARTE RETOURNABLE (FLIP CARD) ---
+ * --- COMPOSANT : CARTE RETOURNABLE (RECOMMENDATION CARD) ---
  */
-function FlipCard({ item }: { item: AISignal }) {
+function RecommendationCard({ item }: { item: AISignal }) {
   const [flipped, setFlipped] = useState(false);
 
   return (

@@ -3,6 +3,7 @@ export interface Stock {
     name?: string;
     shares: number;
     avgPrice: number;
+    sector?: string;
 }
 
 export interface AISignal {

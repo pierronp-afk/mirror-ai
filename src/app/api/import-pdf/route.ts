@@ -28,27 +28,28 @@ export async function POST(req: NextRequest) {
         }
 
         const prompt = `
-            Tu es un extracteur de données financières expert.
+            Tu es un extracteur de données financières expert spécialisé dans l'analyse de relevés de portefeuilles institutionnels.
             Le document PDF joint est un relevé de compte titres.
             
             TA MISSION :
-            1. Analyse le document PDF.
-            2. Identifie tous les titres boursiers (actions, ETF).
-            3. Pour chaque titre, trouve :
-               - Le Nom de l'entreprise (ex: "Apple Inc", "Tesla Motors", "LVMH")
-               - Le Symbole / Ticker (ex: AAPL, TSLA, MC.PA, etc.)
-               - La Quantité détenue (nombre de titres)
-            4. Retourne UNIQUEMENT un tableau JSON d'objets avec les clés "symbol" (string), "name" (string) et "shares" (number).
+            1. Analyse méticuleusement le document PDF.
+            2. Pour chaque ligne de titre/actif identifiée, extrais :
+               - Le Nom de l'entreprise : Extrais le nom complet et propre de l'entreprise (ex: "LVMH MOET HENNESSY" au lieu de "LVMH").
+               - Le Symbole / Ticker : Le code boursier OFFICIEL (ex: AAPL, MSFT, MC.PA, OR.PA). Si absent, déduis-le précisément.
+               - La Quantité : Le nombre d'actions détenues (supporte les décimales).
+               - Le Secteur : Identifie le secteur d'activité principal (ex: Technologie, Luxe, Santé, Énergie, Banque, Semi-conducteurs, Automobile).
+            3. Retourne UNIQUEMENT un tableau JSON d'objets avec les clés "symbol", "name", "shares" et "sector".
 
             RÈGLES CRITIQUES :
-            - Pour le 'name', prends la première ligne descriptive de la position.
-            - Pour le 'symbol', assure-toi qu'il correspond au code boursier.
-            - Pour 'shares', assure-toi que c'est un nombre (utilises le point pour les décimales).
+            - Le "symbol" est PRIORITAIRE pour l'identification.
+            - Si un titre est un fonds (ETF, SICAV), utilise son ticker ou son nom court comme symbole.
+            - Ne pas inclure les lignes de "Cash", "Liquidités" ou "Total".
+            - Format JSON strict sans texte avant ou après.
 
             FORMAT DE RÉPONSE ATTENDU :
             [
-                {"symbol": "AAPL", "name": "Apple Inc", "shares": 10},
-                {"symbol": "MC.PA", "name": "LVMH", "shares": 5.5}
+                {"symbol": "AAPL", "name": "Apple Inc", "shares": 142.5, "sector": "Technologie"},
+                {"symbol": "MC.PA", "name": "LVMH MOET HENNESSY", "shares": 10, "sector": "Luxe"}
             ]
         `;
 
