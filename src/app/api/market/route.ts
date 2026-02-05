@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
+
 interface FinnhubQuote {
     c?: number;
     d?: number;
@@ -21,8 +24,12 @@ export async function GET(req: Request) {
     }
 
     if (!apiKey) {
+        console.error("❌ FINNHUB_API_KEY manquante sur le serveur");
         return NextResponse.json({ error: "Clé API Finnhub manquante (serveur)" }, { status: 500 });
     }
+
+    console.log(`📡 Récupération prix pour : ${symbol} (Key status: OK)`);
+
 
     try {
         const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);

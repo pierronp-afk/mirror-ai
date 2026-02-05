@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
+
 export async function GET(request: NextRequest) {
     try {
         const searchParams = request.nextUrl.searchParams;
@@ -11,9 +14,12 @@ export async function GET(request: NextRequest) {
 
         const apiKey = process.env.FINNHUB_API_KEY;
         if (!apiKey) {
-            console.error('FINNHUB_API_KEY is not configured');
+            console.error('❌ FINNHUB_API_KEY is not configured on Vercel');
             return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
         }
+
+        console.log(`📡 Recherche boursière pour : "${query}" (Key status: OK)`);
+
 
         // Appel à l'API Finnhub pour la recherche de symboles
         const url = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(query)}&token=${apiKey}`;
