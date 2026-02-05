@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-const pdf = require('pdf-parse');
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+    // Dynamic require to avoid build-time errors with DOMMatrix (browser globals)
+    const pdf = require('pdf-parse');
+
     try {
         const formData = await req.formData();
         const file = formData.get('file') as File;
