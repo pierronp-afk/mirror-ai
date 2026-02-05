@@ -8,7 +8,7 @@ import { Stock, AISignal } from '@/types';
 import AddStockModal from '@/components/AddStockModal';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
-  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info
+  Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload
 } from 'lucide-react';
 
 // Les interfaces & types sont maintenant importés depuis @/types
@@ -34,6 +34,8 @@ export default function Dashboard() {
 
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Récupération des données réelles du marché
   // On extrait juste les symboles du portefeuille (AAPL, NVDA, TSLA...)
@@ -51,6 +53,74 @@ export default function Dashboard() {
 
   const handleRemoveStock = (symbol: string) => {
     setStocks(stocks.filter(s => s.symbol !== symbol));
+  };
+
+  const handleImportPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setLoginError(null); // Réutilisation pour afficher d'éventuelles erreurs d'import
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/import-pdf', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('Échec de l\'analyse du PDF');
+
+      const data = await res.json();
+      const importedStocks = data.stocks as { symbol: string, shares: number }[];
+
+      if (importedStocks && importedStocks.length > 0) {
+        // On récupère les prix actuels pour ces nouveaux titres
+        const symbolsToFetch = importedStocks.map(s => s.symbol);
+        const pricesRes = await Promise.all(
+          symbolsToFetch.map(async (s) => {
+            const r = await fetch(`/api/market?symbol=${s}`);
+            const d = await r.json();
+            return { symbol: s, price: d.c || 0 };
+          })
+        );
+
+        const newMarketPrices = Object.fromEntries(pricesRes.map(p => [p.symbol, p.price]));
+
+        setStocks(prev => {
+          const updated = [...prev];
+          importedStocks.forEach(imported => {
+            const existingIdx = updated.findIndex(s => s.symbol === imported.symbol);
+            const price = newMarketPrices[imported.symbol] || imported.shares; // Fallback
+
+            if (existingIdx > -1) {
+              // Remplacer si déjà existant
+              updated[existingIdx] = {
+                ...updated[existingIdx],
+                shares: imported.shares,
+                avgPrice: price // On met à jour le prix d'achat au prix actuel lors de l'import
+              };
+            } else {
+              // Ajouter si nouveau
+              updated.push({
+                symbol: imported.symbol,
+                shares: imported.shares,
+                avgPrice: price
+              });
+            }
+          });
+          return updated;
+        });
+      }
+    } catch (err: any) {
+      console.error('Import error:', err);
+      setLoginError("Erreur lors de l'import PDF. Vérifiez le format du fichier.");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -245,12 +315,31 @@ export default function Dashboard() {
               <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Positions Actuelles</h3>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Géré en temps réel</p>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-white border border-slate-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 text-slate-900"
-            >
-              <Plus size={14} /> Ajouter un actif
-            </button>
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".pdf"
+                onChange={handleImportPDF}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="bg-white border border-slate-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 text-blue-600 disabled:opacity-50"
+              >
+                {isImporting ? (
+                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : <Upload size={14} />}
+                Importer PDF
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-slate-900 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2 text-white"
+              >
+                <Plus size={14} /> Ajouter un actif
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

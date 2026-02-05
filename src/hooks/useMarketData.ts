@@ -17,6 +17,21 @@ export function useMarketData(symbols: string[], refreshInterval = 60000) {
             // On ne recharge pas si aucun symbole
             if (!symbols.length) return;
 
+            // --- THROTTLING HORAIRE (07:30 - 23:00) ---
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+            const startLimit = 7 * 60 + 30; // 07:30
+            const endLimit = 23 * 60;      // 23:00
+
+            if (currentTimeInMinutes < startLimit || currentTimeInMinutes > endLimit) {
+                console.log("⏸️ Marché fermé ou hors plage Mirror AI. Prochain check plus tard.");
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
                 const newPrices: MarketPrices = {};

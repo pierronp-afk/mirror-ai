@@ -20,8 +20,9 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedStock, setSelectedStock] = useState<StockSearchResult | null>(null);
     const [shares, setShares] = useState('');
-    const [avgPrice, setAvgPrice] = useState('');
     const [error, setError] = useState('');
+    const [isFetchingPrice, setIsFetchingPrice] = useState(false);
+    const [fetchedPrice, setFetchedPrice] = useState<number | null>(null);
 
     // Debounced search
     useEffect(() => {
@@ -49,10 +50,27 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const handleSelectStock = (stock: StockSearchResult) => {
+    const handleSelectStock = async (stock: StockSearchResult) => {
         setSelectedStock(stock);
         setSearchQuery(stock.displaySymbol);
         setSearchResults([]);
+        setError('');
+
+        // Fetch current price automatically
+        setIsFetchingPrice(true);
+        try {
+            const res = await fetch(`/api/market?symbol=${stock.symbol}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.c) {
+                    setFetchedPrice(data.c);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching initial price:', err);
+        } finally {
+            setIsFetchingPrice(false);
+        }
     };
 
     const handleSubmit = () => {
@@ -64,15 +82,16 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
         }
 
         const sharesNum = parseFloat(shares);
-        const priceNum = parseFloat(avgPrice);
+        // On utilise le prix récupéré ou 0 par défaut
+        const priceNum = fetchedPrice || 0;
 
         if (!sharesNum || sharesNum <= 0) {
             setError('Nombre d\'actions invalide');
             return;
         }
 
-        if (!priceNum || priceNum <= 0) {
-            setError('Prix moyen invalide');
+        if (priceNum <= 0 && !isFetchingPrice) {
+            setError('Impossible de récupérer le prix actuel. Réessayez.');
             return;
         }
 
@@ -171,21 +190,30 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
                         />
                     </div>
 
-                    {/* Average Price Input */}
-                    <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
-                            Prix moyen d'achat (€)
-                        </label>
-                        <input
-                            type="number"
-                            value={avgPrice}
-                            onChange={(e) => setAvgPrice(e.target.value)}
-                            placeholder="Ex: 175.50"
-                            min="0"
-                            step="0.01"
-                            className="w-full px-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all"
-                        />
-                    </div>
+                    {/* Price Info (Automatic) */}
+                    {selectedStock && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex justify-between items-center">
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">
+                                    Prix actuel (auto)
+                                </label>
+                                {isFetchingPrice ? (
+                                    <div className="h-6 w-24 bg-slate-200 animate-pulse rounded"></div>
+                                ) : (
+                                    <p className="font-black text-xl text-slate-900">
+                                        {fetchedPrice ? `${fetchedPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : '---'}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">Marché réel</p>
+                                <div className="flex items-center gap-1 text-slate-400">
+                                    <TrendingUp size={14} />
+                                    <span className="text-[10px] font-bold">LIVE</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Error Message */}
                     {error && (
