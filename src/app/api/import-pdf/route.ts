@@ -85,6 +85,13 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("PDF Import Error:", error);
-        return NextResponse.json({ error: "Erreur lors du traitement du PDF", details: error.message }, { status: 500 });
+        return NextResponse.json({
+            error: "Erreur lors du traitement du PDF",
+            details: error.message,
+            stack: error.stack,
+            env: {
+                hasApiKey: !!process.env.GEMINI_API_KEY
+            }
+        }, { status: 500 });
     }
 }
