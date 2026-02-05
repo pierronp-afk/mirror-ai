@@ -71,7 +71,11 @@ export default function Dashboard() {
         body: formData
       });
 
-      if (!res.ok) throw new Error('Échec de l\'analyse du PDF');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('❌ Détails erreur serveur Mirror AI:', errorData);
+        throw new Error(errorData.error || 'Échec de l\'analyse du PDF');
+      }
 
       const data = await res.json();
       const importedStocks = data.stocks as { symbol: string, shares: number }[];
