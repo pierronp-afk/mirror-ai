@@ -100,13 +100,21 @@ export function buildPortfolioAnalysisPrompt(
 
     prompt += `MISSION : Audit institutionnel du portefeuille : ${portfolioContext}.
 
-INSTRUCTIONS :
-- Rapporte la santé globale et une projection à 3 mois RÉALISTE (même si négative).
-- Pour CHAQUE titre du portefeuille, génère un signal détaillé avec une perspective à 3 mois.
-- Sois CRITIQUE et OBJECTIF. Si un titre est mauvais, dis-le clairement.
-- Ajoute une section 'opportunities' avec 3-4 titres hors portefeuille classés par horizon.
-- Pour les "FUSIL" (très court terme), indique le niveau d'urgence (CRITIQUE/ÉLEVÉE/NORMALE).
-- Inclus une courbe prévisionnelle ('forecast') sur 30 jours réaliste.
+INSTRUCTIONS DÉTAILLÉES :
+1. ANALYSE PORTEFEUILLE (Signals) :
+   - Pour CHAQUE titre, fournis des recommandations CHIFFRÉES précises.
+   - Si conseil = "Alléger" ou "Vendre", indique le POURCENTAGE conseillé (ex: 15%).
+   - Indique le contexte de marché global influençant ce titre.
+   - Donne un conseil d'équilibrage pour le portefeuille.
+
+2. OPPORTUNITÉS (Modules) :
+   - Propose STRICTEMENT 3 types d'opportunités avec potentiel > 10% :
+     a. **LONG TERME** : Investissement stratégique (>1 an).
+     b. **COURT TERME** : Trading swing (semaines/mois) avec prix entrée max et sortie cible.
+     c. **COUP DE FUSIL** : Spéculatif, très court terme, haut rendement/risque.
+
+3. FORECAST :
+   - Inclure une courbe prévisionnelle réaliste sur 30 jours.
 
 RÉPONSE STRICTE JSON :
 {
@@ -119,12 +127,13 @@ RÉPONSE STRICTE JSON :
       "symbol": "TICKER",
       "name": "Nom",
       "reason": "Argument court et factuel",
-      "justification": "Détails fondamentaux / actu OBJECTIFS",
-      "threeMonthOutlook": "Perspective détaillée à 3 mois avec scénarios",
+      "justification": "Contexte de marché et analyse fondamentale détaillée",
+      "threeMonthOutlook": "Perspective détaillée à 3 mois",
       "rec": "CONSEIL CLAIR",
       "urgency": "HAUTE/MODÉRÉE/FAIBLE",
       "color": "rose/emerald/blue",
-      "advice": "Vendre/Renforcer/...",
+      "advice": "Vendre/Alléger/Conserver/Renforcer",
+      "percentRecommendation": 15, // % conseillé (0 si conserver)
       "targetPrice": 0,
       "stopLoss": 0
     }
@@ -133,15 +142,16 @@ RÉPONSE STRICTE JSON :
     {
       "symbol": "TICKER",
       "name": "Nom",
-      "horizon": "LONG/MEDIUM/SHORT/FUSIL",
-      "reason": "Pourquoi ce titre ? FACTUEL",
-      "priceMax": 0,
-      "priceExit": 0,
+      "horizon": "LONG/SHORT/FUSIL", // 'MEDIUM' n'est plus demandé mais toléré
+      "reason": "Pourquoi >10% potentiel ?",
+      "priceMax": 0, // Prix max d'entrée
+      "priceExit": 0, // Objectif de sortie
       "urgencyLevel": "CRITIQUE/ÉLEVÉE/NORMALE",
       "sector": "Secteur"
     }
   ],
   "newsHighlight": "Titre actu pertinent",
+  "balanceAdvice": "Conseil global d'équilibre du portefeuille",
   "forecast": [{"date": "ISO", "value": 0}],
   "lastUpdated": ${Date.now()}
 }`;
@@ -172,4 +182,41 @@ export function buildQuestionPrompt(
   {"symbol": "TICKER", "name": "Nom", "reason": "Justification factuelle", "targetPrice": 0}`;
 
     return prompt;
+}
+
+/**
+ * Génère un prompt pour l'analyse d'une seule action
+ */
+export function buildStockAnalysisPrompt(
+    stockSymbol: string,
+    stockName: string,
+    price: number,
+    shares: number,
+    avgPrice: number
+): string {
+    return `${SYSTEM_PROMPT}
+
+MISSION : Analyse flash détaillée de l'action ${stockName} (${stockSymbol}).
+Données: ${shares} titres détenus à ${avgPrice}€ (Prix actuel: ${price}€).
+
+INSTRUCTIONS :
+- Fournis une recommandation CHIFFRÉE (pourcentage d'allègement ou de renforcement si applicable).
+- Analyse le contexte de marché spécifique à ce titre.
+- Donne une perspective à 3 mois.
+
+RÉPONSE STRICTE JSON :
+{
+  "symbol": "${stockSymbol}",
+  "name": "${stockName}",
+  "reason": "Argument clé (1 phrase)",
+  "justification": "Analyse détaillée contexte marché",
+  "threeMonthOutlook": "Scénario à 3 mois",
+  "rec": "CONSEIL COURT",
+  "urgency": "HAUTE/MODÉRÉE/FAIBLE",
+  "color": "rose/emerald/blue",
+  "advice": "Vendre/Alléger/Conserver/Renforcer",
+  "percentRecommendation": 0,
+  "targetPrice": 0,
+  "stopLoss": 0
+}`;
 }

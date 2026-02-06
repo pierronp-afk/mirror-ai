@@ -35,7 +35,7 @@ import StockCard from '@/components/StockCard';
 export default function Dashboard() {
   const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
   const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
-  const { analyzePortfolio, askQuestion, uploadTradingDocument, hasTradingDocs, analysis, isAnalyzing, error: aiError } = useAI();
+  const { analyzePortfolio, analyzeStock, askQuestion, uploadTradingDocument, hasTradingDocs, analysis, isAnalyzing, error: aiError } = useAI();
 
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -54,7 +54,7 @@ export default function Dashboard() {
   const stockSymbols = useMemo(() => stocks.map(s => s.symbol), [stocks]);
   const { prices: marketPrices } = useMarketData(stockSymbols);
 
-  // Rafraîchissement automatique toutes les 5 minutes
+  // Rafraîchissement automatique toutes les 15 minutes
   const handleMarketRefresh = useCallback((newPrices: MarketPrices) => {
     setLocalMarketPrices(newPrices);
   }, []);
@@ -300,14 +300,27 @@ export default function Dashboard() {
             <h1 className="text-xl font-black tracking-tighter uppercase italic text-slate-900">Mirror<span className="text-blue-600">AI</span></h1>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={manualRefresh}
-              disabled={isRefreshing}
-              className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50"
-              title={`Dernière mise à jour: ${new Date(lastUpdate).toLocaleTimeString('fr-FR')}`}
-            >
-              <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
-            </button>
+            <div className="relative group">
+              <button
+                onClick={manualRefresh}
+                disabled={isRefreshing}
+                className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
+              {/* Tooltip avec temps restant */}
+              <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900 text-white text-xs rounded-xl p-3 shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                <p className="font-bold mb-1">
+                  {isRefreshing ? '⏳ Actualisation en cours...' : '🔄 Actualisation marché'}
+                </p>
+                <p className="text-slate-300 text-[10px]">
+                  Dernière mise à jour: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
+                </p>
+                <p className="text-slate-300 text-[10px] mt-1">
+                  Auto-refresh toutes les 15 min
+                </p>
+              </div>
+            </div>
             <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
               <Bell size={20} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
@@ -487,16 +500,93 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* TRI DES CARTES PAR ACTION ET URGENCE */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stocks.map((stock) => (
-              <StockCard
-                key={stock.symbol}
-                stock={stock}
-                marketData={effectiveMarketPrices[stock.symbol]}
-                aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
-                onRemove={handleRemoveStock}
-              />
-            ))}
+            {stocks
+              .slice()
+              .sort((a, b) => {
+                const aSignal = analysis?.signals.find(s => s.symbol === a.symbol);
+                const bSignal = analysis?.signals.find(s => s.symbol === b.symbol);
+
+                // Ordre de priorité: Alléger/Vendre (1) > Renforcer/Acheter (2) > Conserver (3)
+                const getPriority = (signal?: AISignal) => {
+                  if (!signal?.advice) return 3;
+                  if (signal.advice === "Vendre" || signal.advice === "Alléger") return 1;
+                  if (signal.advice === "Renforcer" || signal.advice === "Acheter") return 2;
+                  return 3; // Conserver
+                };
+
+                const aP = getPriority(aSignal);
+                const bP = getPriority(bSignal);
+
+                if (aP !== bP) return aP - bP;
+
+                // Tri secondaire par urgence
+                const urgencyValue = (signal?: AISignal) => {
+                  if (!signal?.urgency) return 0;
+                  if (signal.urgency === "HAUTE") return 3;
+                  if (signal.urgency === "MODÉRÉE") return 2;
+                  return 1; // FAIBLE
+                };
+
+                return urgencyValue(bSignal) - urgencyValue(aSignal);
+              })
+              .map((stock) => (
+                <StockCard
+                  key={stock.symbol}
+                  stock={stock}
+                  marketData={effectiveMarketPrices[stock.symbol]}
+                  aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
+                  onRemove={handleRemoveStock}
+                  onRefresh={async (symbol) => {
+                    try {
+                      // 1. Données de marché
+                      const res = await fetch(`/api/market?symbol=${symbol}`);
+                      let marketData: { c: number; d: number; dp: number } | null = null;
+
+                      if (res.ok) {
+                        marketData = await res.json();
+                        setLocalMarketPrices(prev => ({
+                          ...prev,
+                          [symbol]: {
+                            price: marketData?.c || 0,
+                            change: marketData?.d || 0,
+                            changePercent: marketData?.dp || 0
+                          }
+                        }));
+                      }
+
+                      // 2. Profil Entreprise (Nom complet)
+                      const currentStock = stocks.find(s => s.symbol === symbol);
+
+                      if (currentStock) {
+                        // Si le nom est identique au symbole (par défaut), on tente de récupérer le vrai nom
+                        if (!currentStock.name || currentStock.name === symbol || currentStock.name.toUpperCase() === symbol.toUpperCase()) {
+                          const resProfile = await fetch(`/api/market?symbol=${symbol}&type=profile`);
+                          if (resProfile.ok) {
+                            const profile = await resProfile.json();
+                            if (profile.name) {
+                              // Mise à jour persistante du nom via setStocks (qui est syncStocks)
+                              const updatedStocks = stocks.map(s => s.symbol === symbol ? { ...s, name: profile.name, logo: profile.logo } : s);
+                              setStocks(updatedStocks);
+
+                              // Mise à jour de la ref locale pour l'analyse
+                              currentStock.name = profile.name;
+                            }
+                          }
+                        }
+
+                        // 3. Analyse IA spécifique
+                        if (marketData && analyzeStock) {
+                          await analyzeStock(currentStock, marketData.c || currentStock.avgPrice);
+                        }
+                      }
+                    } catch (err) {
+                      console.error('Erreur refresh:', err);
+                    }
+                  }}
+                />
+              ))}
           </div>
 
           {/* OPPORTUNITÉS */}

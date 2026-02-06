@@ -25,6 +25,7 @@ export interface AISignal {
     urgency: string;
     color: string;
     advice?: "Vendre" | "Alléger" | "Conserver" | "Renforcer" | "Acheter";
+    percentRecommendation?: number; // % recommandé pour alléger/renforcer
     targetPrice?: number;
     stopLoss?: number;
     threeMonthOutlook?: string; // Perspective détaillée à 3 mois
@@ -49,6 +50,7 @@ export interface AIAnalysis {
     signals: AISignal[];
     opportunities: Opportunity[];
     newsHighlight: string;
+    balanceAdvice?: string;
     forecast?: { date: string; value: number }[];
     lastUpdated?: number;
 }

@@ -5,7 +5,7 @@ import { MarketPrices } from '@/types';
  * Hook pour récupérer les données de marché en temps réel (ou presque).
  * Utilise notre route API /api/market pour éviter d'exposer la clé Finnhub.
  */
-export function useMarketData(symbols: string[], refreshInterval = 60000) {
+export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 1000) {
     const [prices, setPrices] = useState<Record<string, { price: number; change: number; changePercent: number }>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

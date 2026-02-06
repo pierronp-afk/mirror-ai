@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Stock, AISignal } from '@/types';
-import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw } from 'lucide-react';
 
 interface StockCardProps {
     stock: Stock;
     marketData?: { price: number; change: number; changePercent: number };
     aiSignal?: AISignal;
     onRemove: (symbol: string) => void;
+    onRefresh?: (symbol: string) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, onRemove }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, onRemove, onRefresh }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const currentPrice = marketData?.price || stock.avgPrice;
     const gain = (currentPrice - stock.avgPrice) * stock.shares;
@@ -61,6 +63,27 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove }: Sto
     const logoUrl = `https://logo.clearbit.com/${domain}`;
     const fallbackLogoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
+    // Déterminer la couleur du conseil d'action
+    const getAdviceColor = () => {
+        const advice = aiSignal?.advice || (isPos ? "Renforcer" : "Alléger");
+        if (advice === "Vendre" || advice === "Alléger") return "rose";
+        if (advice === "Renforcer" || advice === "Acheter") return "emerald";
+        return "blue"; // Conserver
+    };
+
+    const adviceColor = getAdviceColor();
+    const adviceText = aiSignal?.advice || (isPos ? "Renforcer" : "Alléger");
+    const percentText = aiSignal?.percentRecommendation ? ` ${aiSignal.percentRecommendation}%` : '';
+
+    const handleRefresh = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (onRefresh && !isRefreshing) {
+            setIsRefreshing(true);
+            await onRefresh(stock.symbol);
+            setTimeout(() => setIsRefreshing(false), 1000);
+        }
+    };
+
     return (
         <div className="relative h-[520px] w-full cursor-pointer perspective-1000 group/card" onClick={() => setFlipped(!flipped)}>
             <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
@@ -69,7 +92,7 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove }: Sto
                 <div className="absolute inset-0 backface-hidden bg-white/70 backdrop-blur-xl border border-white/40 rounded-[3rem] p-8 shadow-2xl shadow-slate-200/50 flex flex-col justify-between hover:border-blue-400/50 hover:shadow-blue-200/20 transition-all duration-500">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent rounded-[3rem] -z-10" />
 
-                    {/* Header: Logo & Symbol + Name */}
+                    {/* Header: Logo & Company Name + Symbol */}
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center overflow-hidden border border-slate-100 p-2 shadow-sm group-hover/card:scale-105 transition-transform duration-500">
@@ -88,30 +111,37 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove }: Sto
                                 />
                             </div>
                             <div>
-                                <h3 className="text-3xl font-black tracking-tighter text-slate-900 leading-none mb-1">{stock.symbol}</h3>
-                                <div className="flex items-center gap-2">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] truncate max-w-[120px]">{stock.name || "Action"}</p>
-                                    {stock.sector && (
-                                        <>
-                                            <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                                            <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">{stock.sector}</p>
-                                        </>
-                                    )}
-                                </div>
+                                {/* NOM COMPLET EN GRAS */}
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900 leading-none mb-1">
+                                    {stock.name || stock.symbol}
+                                </h3>
+                                {/* SYMBOLE EN PETIT GRIS EN DESSOUS */}
+                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                    {stock.symbol}
+                                </p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end gap-3">
+                        <div className="flex flex-col items-end gap-2">
+                            {/* BOUTON ACTUALISER */}
+                            <button
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100 disabled:opacity-50"
+                                title="Actualiser les données"
+                            >
+                                <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                            </button>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onRemove(stock.symbol);
                                 }}
-                                className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all border border-transparent hover:border-rose-100 shadow-sm"
+                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
                                 title="Supprimer"
                             >
-                                <Trash2 size={18} />
+                                <Trash2 size={16} />
                             </button>
-                            <div className="text-right">
+                            <div className="text-right mt-1">
                                 <div className={`flex items-center gap-1 font-black text-sm justify-end ${isDailyPos ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {isDailyPos ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                     {dailyChange.toFixed(2)}%
@@ -121,25 +151,37 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove }: Sto
                         </div>
                     </div>
 
-                    {/* AI Advice Section (Variation + Advice + Urgency) */}
-                    <div className="mt-8 p-6 bg-slate-900 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl group-hover/card:bg-blue-950 transition-colors duration-500">
-                        <div className="absolute top-0 right-0 p-8 opacity-5 -mr-4 -mt-4">
-                            <ShieldCheck size={100} />
-                        </div>
-                        <div className="flex justify-between items-center mb-5 relative z-10">
-                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.3em] italic">Mirror Engine v1.5</p>
+                    {/* AI Advice Section - THEME PLUS CLAIR avec CONSEIL EN COULEUR */}
+                    <div className="mt-8 p-6 bg-slate-50/80 rounded-[2.5rem] border border-slate-200/50 relative overflow-hidden shadow-lg">
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Mirror Engine v1.5</p>
                             {aiSignal && (
-                                <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${aiSignal.urgency === 'HAUTE' ? 'border-rose-500/50 text-rose-400 bg-rose-500/5' : 'border-blue-500/50 text-blue-400 bg-blue-500/5'
+                                <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${aiSignal.urgency === 'HAUTE'
+                                        ? 'border-rose-500/50 text-rose-600 bg-rose-50'
+                                        : 'border-blue-500/50 text-blue-600 bg-blue-50'
                                     }`}>
                                     {aiSignal.urgency}
                                 </span>
                             )}
                         </div>
-                        <div className="flex items-center justify-between gap-4 relative z-10">
-                            <span className={`flex-1 px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase text-center tracking-[0.2em] bg-blue-600 shadow-xl shadow-blue-600/20 group-hover/card:scale-[1.02] transition-transform`}>
-                                {aiSignal?.advice || (isPos ? "Renforcer" : "Alléger")}
+
+                        {/* CONSEIL ACTION AVEC COULEUR */}
+                        <div className="flex items-center justify-center">
+                            <span className={`px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-md ${adviceColor === 'rose'
+                                    ? 'bg-rose-500 text-white'
+                                    : adviceColor === 'emerald'
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-blue-500 text-white'
+                                }`}>
+                                {adviceText}{percentText}
                             </span>
                         </div>
+
+                        {aiSignal?.reason && (
+                            <p className="text-[10px] text-slate-600 italic text-center mt-3 leading-relaxed">
+                                "{aiSignal.reason}"
+                            </p>
+                        )}
                     </div>
 
                     {/* Performance Section (Total Gain + Daily Gain) */}
@@ -169,6 +211,10 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove }: Sto
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valeur Position</p>
                                 <p className="text-2xl font-black text-slate-900 tracking-tighter">
                                     {(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                                </p>
+                                {/* NOMBRE DE TITRES EN GRIS CLAIR */}
+                                <p className="text-[10px] font-medium text-slate-400 mt-1">
+                                    {stock.shares} {stock.shares > 1 ? 'titres' : 'titre'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">

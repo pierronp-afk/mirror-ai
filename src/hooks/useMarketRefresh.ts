@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MarketPrices } from '@/types';
 
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
 
 interface UseMarketRefreshOptions {
     symbols: string[];

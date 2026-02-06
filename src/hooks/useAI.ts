@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Stock, MarketPrices, AIAnalysis } from '@/types';
-import { buildPortfolioAnalysisPrompt, buildQuestionPrompt } from '@/lib/aiConfig';
+import { buildPortfolioAnalysisPrompt, buildQuestionPrompt, buildStockAnalysisPrompt } from '@/lib/aiConfig';
 
 export function useAI() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -53,6 +53,53 @@ export function useAI() {
     }
   };
 
+  const analyzeStock = async (stock: Stock, marketPrice: number): Promise<any> => {
+    try {
+      const prompt = buildStockAnalysisPrompt(
+        stock.symbol,
+        stock.name || stock.symbol,
+        marketPrice,
+        stock.shares,
+        stock.avgPrice
+      );
+
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Erreur IA");
+
+      const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const newSignal = JSON.parse(jsonMatch[0]);
+
+        // Mettre à jour l'état local si une analyse existe déjà
+        if (analysis) {
+          setAnalysis(prev => {
+            if (!prev) return null;
+            const exists = prev.signals.find(s => s.symbol === stock.symbol);
+            let newSignals;
+            if (exists) {
+              newSignals = prev.signals.map(s => s.symbol === stock.symbol ? newSignal : s);
+            } else {
+              newSignals = [...prev.signals, newSignal];
+            }
+            return { ...prev, signals: newSignals };
+          });
+        }
+
+        return newSignal;
+      }
+      return null;
+    } catch (err) {
+      console.error("Erreur analyzeStock:", err);
+      return null;
+    }
+  };
+
   const askQuestion = async (question: string): Promise<string> => {
     try {
       const portfolioContext = analysis
@@ -94,6 +141,7 @@ export function useAI() {
 
   return {
     analyzePortfolio,
+    analyzeStock,
     askQuestion,
     uploadTradingDocument,
     clearTradingDocuments,
