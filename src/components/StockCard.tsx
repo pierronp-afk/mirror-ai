@@ -151,27 +151,33 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                         </div>
                     </div>
 
-                    {/* AI Advice Section - THEME PLUS CLAIR avec CONSEIL EN COULEUR */}
-                    <div className="mt-8 p-6 bg-slate-50/80 rounded-[2.5rem] border border-slate-200/50 relative overflow-hidden shadow-lg">
-                        <div className="flex justify-between items-center mb-4">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Mirror Engine v1.5</p>
+                    {/* AI Advice Section - THEME CLAIR CORRIGÉ */}
+                    <div className="mt-8 p-6 bg-slate-50/80 border border-slate-200/60 rounded-[2.5rem] relative overflow-hidden shadow-sm hover:shadow-md transition-all">
+                        {/* Fond subtil coloré selon le conseil */}
+                        <div className={`absolute inset-0 opacity-10 ${adviceColor === 'rose' ? 'bg-rose-500' :
+                                adviceColor === 'emerald' ? 'bg-emerald-500' :
+                                    'bg-blue-500'
+                            }`} />
+
+                        <div className="flex justify-between items-center mb-4 relative z-10">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] italic">Mirror Engine v1.5</p>
                             {aiSignal && (
                                 <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${aiSignal.urgency === 'HAUTE'
-                                        ? 'border-rose-500/50 text-rose-600 bg-rose-50'
-                                        : 'border-blue-500/50 text-blue-600 bg-blue-50'
+                                        ? 'border-rose-200 text-rose-600 bg-white'
+                                        : 'border-blue-200 text-blue-600 bg-white'
                                     }`}>
                                     {aiSignal.urgency}
                                 </span>
                             )}
                         </div>
 
-                        {/* CONSEIL ACTION AVEC COULEUR */}
-                        <div className="flex items-center justify-center">
-                            <span className={`px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-md ${adviceColor === 'rose'
-                                    ? 'bg-rose-500 text-white'
+                        {/* CONSEIL ACTION AVEC COULEUR FORCEE */}
+                        <div className="flex items-center justify-center relative z-10">
+                            <span className={`w-full py-4 rounded-xl text-[12px] font-black uppercase text-center tracking-[0.2em] shadow-lg transform transition-transform group-hover/card:scale-[1.02] ${adviceColor === 'rose'
+                                    ? 'bg-rose-500 text-white shadow-rose-500/30'
                                     : adviceColor === 'emerald'
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'bg-blue-500 text-white'
+                                        ? 'bg-emerald-500 text-white shadow-emerald-500/30'
+                                        : 'bg-blue-600 text-white shadow-blue-600/30'
                                 }`}>
                                 {adviceText}{percentText}
                             </span>
