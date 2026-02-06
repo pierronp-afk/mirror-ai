@@ -590,7 +590,20 @@ export default function Dashboard() {
           </div>
 
           {/* OPPORTUNITÉS */}
-          {analysis?.opportunities && <OpportunitiesSection opportunities={analysis.opportunities} />}
+          {/* OPPORTUNITÉS */}
+          {analysis?.opportunities && analysis.opportunities.length > 0 ? (
+            <OpportunitiesSection opportunities={analysis.opportunities} />
+          ) : (
+            <div className="mt-20 text-center border-2 border-dashed border-slate-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center gap-4 opacity-50">
+              <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Module Opportunités en attente</p>
+              <button
+                onClick={() => setShowAIModal(true)}
+                className="flex items-center gap-2 text-blue-500 font-black uppercase text-[10px] tracking-widest hover:text-blue-600 transition-colors"
+              >
+                <Sparkles size={14} /> Lancer l'audit pour détecter des opportunités
+              </button>
+            </div>
+          )}
         </section>
       </main>
 
