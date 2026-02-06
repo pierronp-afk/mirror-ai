@@ -74,5 +74,10 @@ export function usePortfolio() {
         await syncStocks(updated);
     };
 
-    return { stocks, loading, error, addStock, removeStock, updateStock, setStocks: syncStocks };
+    const updateStockQuantity = async (symbol: string, shares: number) => {
+        const updated = stocks.map(s => s.symbol === symbol ? { ...s, shares } : s);
+        await syncStocks(updated);
+    };
+
+    return { stocks, loading, error, addStock, removeStock, updateStock, updateStockQuantity, setStocks: syncStocks };
 }

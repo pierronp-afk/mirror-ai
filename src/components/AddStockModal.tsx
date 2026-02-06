@@ -20,6 +20,7 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedStock, setSelectedStock] = useState<StockSearchResult | null>(null);
     const [shares, setShares] = useState('');
+    const [buyPrice, setBuyPrice] = useState('');
     const [error, setError] = useState('');
     const [isFetchingPrice, setIsFetchingPrice] = useState(false);
     const [fetchedPrice, setFetchedPrice] = useState<number | null>(null);
@@ -33,6 +34,7 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
 
         setIsSearching(true);
         const timer = setTimeout(async () => {
+            // ... existing code ...
             try {
                 const response = await fetch(`/api/stock-search?q=${encodeURIComponent(searchQuery)}`);
                 if (!response.ok) throw new Error('Search failed');
@@ -45,12 +47,13 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
             } finally {
                 setIsSearching(false);
             }
-        }, 300); // Debounce de 300ms
+        }, 300);
 
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
     const handleSelectStock = async (stock: StockSearchResult) => {
+        // ... existing code ...
         setSelectedStock(stock);
         setSearchQuery(stock.displaySymbol);
         setSearchResults([]);
@@ -64,6 +67,7 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
                 const data = await res.json();
                 if (data.c) {
                     setFetchedPrice(data.c);
+                    // Do NOT auto-fill buyPrice, assume user wants to enter it or leave empty for sync
                 }
             }
         } catch (err) {
@@ -82,18 +86,23 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
         }
 
         const sharesNum = parseFloat(shares);
-        // On utilise le prix récupéré ou 0 par défaut
-        const priceNum = fetchedPrice || 0;
+        // Use manual buy price if provided, otherwise 0 implies "Sync/Unknown"
+        // But if user left empty, we might want to use fetchedPrice as fallback? 
+        // User asked: "enter without associated price and it syncs when market opens"
+        // This implies Price = 0.
+        // If user wants to accept Current Price, they can click "Utiliser comme PRU".
+        // So if empty, we send 0.
+        let priceNum = 0;
+        if (buyPrice !== '') {
+            priceNum = parseFloat(buyPrice);
+        }
 
         if (!sharesNum || sharesNum <= 0) {
             setError('Nombre d\'actions invalide');
             return;
         }
 
-        if (priceNum <= 0 && !isFetchingPrice) {
-            setError('Impossible de récupérer le prix actuel. Réessayez.');
-            return;
-        }
+        // Removed the check for priceNum <= 0 to allow sync mode
 
         onAdd(selectedStock.symbol, sharesNum, priceNum, selectedStock.description);
         onClose();
@@ -175,41 +184,64 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
                     )}
 
                     {/* Shares Input */}
-                    <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
-                            Nombre d&apos;actions
-                        </label>
-                        <input
-                            type="number"
-                            value={shares}
-                            onChange={(e) => setShares(e.target.value)}
-                            placeholder="Ex: 10"
-                            min="0"
-                            step="0.01"
-                            className="w-full px-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all"
-                        />
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                                Nombre d&apos;actions
+                            </label>
+                            <input
+                                type="number"
+                                value={shares}
+                                onChange={(e) => setShares(e.target.value)}
+                                placeholder="Ex: 10"
+                                min="0"
+                                step="0.01"
+                                className="w-full px-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                                Prix d&apos;achat (PRU)
+                            </label>
+                            <input
+                                type="number"
+                                value={buyPrice}
+                                onChange={(e) => setBuyPrice(e.target.value)}
+                                placeholder="Optionnel (0 = Sync)"
+                                min="0"
+                                step="0.01"
+                                className="w-full px-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all placeholder:text-slate-300"
+                            />
+                        </div>
                     </div>
 
-                    {/* Price Info (Automatic) */}
+                    {/* Price Info (Automatic Context) */}
                     {selectedStock && (
-                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex justify-between items-center">
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
                             <div>
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">
-                                    Prix actuel (auto)
+                                    Cours en direct
                                 </label>
                                 {isFetchingPrice ? (
                                     <div className="h-6 w-24 bg-slate-200 animate-pulse rounded"></div>
                                 ) : (
-                                    <p className="font-black text-xl text-slate-900">
-                                        {fetchedPrice ? `${fetchedPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : '---'}
-                                    </p>
+                                    <div className="flex items-baseline gap-2">
+                                        <p className="font-black text-xl text-slate-900">
+                                            {fetchedPrice ? `${fetchedPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : '---'}
+                                        </p>
+                                        <button
+                                            onClick={() => setBuyPrice(fetchedPrice?.toString() || '')}
+                                            className="text-[10px] font-bold text-blue-500 uppercase hover:underline"
+                                        >
+                                            Utiliser comme PRU
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">Marché réel</p>
-                                <div className="flex items-center gap-1 text-slate-400">
+                                <div className="flex items-center gap-1 text-emerald-500 justify-end">
                                     <TrendingUp size={14} />
-                                    <span className="text-[10px] font-bold">LIVE</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">LIVE</span>
                                 </div>
                             </div>
                         </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Stock, AISignal } from '@/types';
-import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw, Edit2, Check, X } from 'lucide-react';
 
 interface StockCardProps {
     stock: Stock;
@@ -8,11 +8,14 @@ interface StockCardProps {
     aiSignal?: AISignal;
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
+    onUpdateQuantity?: (symbol: string, newQuantity: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, onRemove, onRefresh }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, onRemove, onRefresh, onUpdateQuantity }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editQuantity, setEditQuantity] = useState(stock.shares.toString());
 
     const currentPrice = marketData?.price || stock.avgPrice;
     const gain = (currentPrice - stock.avgPrice) * stock.shares;
@@ -84,8 +87,23 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
         }
     };
 
+    const handleSaveQuantity = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const qty = parseFloat(editQuantity);
+        if (!isNaN(qty) && qty > 0 && onUpdateQuantity) {
+            onUpdateQuantity(stock.symbol, qty);
+            setIsEditing(false);
+        }
+    };
+
+    // Calcul de la progression vers la cible
+    const targetPrice = aiSignal?.targetPrice || (currentPrice * 1.15); // Fallback target +15%
+    let progress = 0;
+    // Simplification visuelle : on montre où on est entre 0 et Target
+    progress = Math.min(100, Math.max(5, (currentPrice / targetPrice) * 100));
+
     return (
-        <div className="relative h-[520px] w-full cursor-pointer perspective-1000 group/card" onClick={() => setFlipped(!flipped)}>
+        <div className="relative h-[520px] w-full cursor-pointer perspective-1000 group/card" onClick={() => !isEditing && setFlipped(!flipped)}>
             <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
 
                 {/* FRONT FACE */}
@@ -152,42 +170,39 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                     </div>
 
                     {/* AI Advice Section - THEME CLAIR CORRIGÉ */}
-                    <div className="mt-8 p-6 bg-slate-50/80 border border-slate-200/60 rounded-[2.5rem] relative overflow-hidden shadow-sm hover:shadow-md transition-all">
-                        {/* Fond subtil coloré selon le conseil */}
-                        <div className={`absolute inset-0 opacity-10 ${adviceColor === 'rose' ? 'bg-rose-500' :
-                                adviceColor === 'emerald' ? 'bg-emerald-500' :
-                                    'bg-blue-500'
-                            }`} />
-
-                        <div className="flex justify-between items-center mb-4 relative z-10">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] italic">Mirror Engine v1.5</p>
-                            {aiSignal && (
-                                <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${aiSignal.urgency === 'HAUTE'
-                                        ? 'border-rose-200 text-rose-600 bg-white'
-                                        : 'border-blue-200 text-blue-600 bg-white'
-                                    }`}>
-                                    {aiSignal.urgency}
-                                </span>
-                            )}
+                    {/* NEW: 3-ZONE ACTION CAPSULE */}
+                    <div className="mt-6 mx-auto w-full bg-slate-50 border border-slate-200 rounded-full p-2 flex items-center shadow-inner relative overflow-hidden group-hover/card:shadow-md transition-shadow">
+                        {/* Zone 1: Action Button */}
+                        <div className={`relative px-6 py-3 rounded-full shadow-lg z-10 flex items-center justify-center min-w-[120px] ${adviceColor === 'rose' ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white' :
+                            adviceColor === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white' :
+                                'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                            }`}>
+                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">{adviceText}</span>
                         </div>
 
-                        {/* CONSEIL ACTION AVEC COULEUR FORCEE */}
-                        <div className="flex items-center justify-center relative z-10">
-                            <span className={`w-full py-4 rounded-xl text-[12px] font-black uppercase text-center tracking-[0.2em] shadow-lg transform transition-transform group-hover/card:scale-[1.02] ${adviceColor === 'rose'
-                                    ? 'bg-rose-500 text-white shadow-rose-500/30'
-                                    : adviceColor === 'emerald'
-                                        ? 'bg-emerald-500 text-white shadow-emerald-500/30'
-                                        : 'bg-blue-600 text-white shadow-blue-600/30'
-                                }`}>
-                                {adviceText}{percentText}
+                        {/* Zone 2: Target Price Progress */}
+                        <div className="flex-1 px-4 flex flex-col items-center justify-center relative z-0">
+                            <div className="w-full flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                <span>{currentPrice.toFixed(0)}</span>
+                                <span>Cible: {targetPrice.toFixed(0)} {stock.symbol.includes('.PA') ? '€' : '$'}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                    style={{ width: `${progress}%` }}
+                                    className={`h-full rounded-full transition-all duration-1000 ${adviceColor === 'rose' ? 'bg-rose-400' :
+                                        adviceColor === 'emerald' ? 'bg-emerald-400' : 'bg-blue-400'
+                                        }`}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Zone 3: Stop Loss / Risk */}
+                        <div className="pr-4 pl-2 border-l border-slate-200 flex flex-col items-end justify-center min-w-[70px]">
+                            <span className="text-[8px] font-black text-rose-400 uppercase tracking-wider leading-none mb-0.5">Stop</span>
+                            <span className="text-[10px] font-bold text-slate-600 leading-none">
+                                {aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(0) : (currentPrice * 0.9).toFixed(0)}
                             </span>
                         </div>
-
-                        {aiSignal?.reason && (
-                            <p className="text-[10px] text-slate-600 italic text-center mt-3 leading-relaxed">
-                                "{aiSignal.reason}"
-                            </p>
-                        )}
                     </div>
 
                     {/* Performance Section (Total Gain + Daily Gain) */}
@@ -212,21 +227,44 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
-                            <div>
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valeur Position</p>
-                                <p className="text-2xl font-black text-slate-900 tracking-tighter">
-                                    {(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                                </p>
-                                {/* NOMBRE DE TITRES EN GRIS CLAIR */}
-                                <p className="text-[10px] font-medium text-slate-400 mt-1">
-                                    {stock.shares} {stock.shares > 1 ? 'titres' : 'titre'}
-                                </p>
+                        <div className="flex justify-between items-end border-t border-slate-100 pt-6">
+                            {/* EDITABLE QUANTITY */}
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Position</p>
+                                {isEditing ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={editQuantity}
+                                            onChange={(e) => setEditQuantity(e.target.value)}
+                                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-500 shadow-inner"
+                                            autoFocus
+                                        />
+                                        <button onClick={handleSaveQuantity} className="p-1.5 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 shadow-sm transition-colors">
+                                            <Check size={14} />
+                                        </button>
+                                        <button onClick={() => { setIsEditing(false); setEditQuantity(stock.shares.toString()) }} className="p-1.5 bg-rose-500 text-white rounded-md hover:bg-rose-600 shadow-sm transition-colors">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 group/edit cursor-pointer" onClick={() => { setIsEditing(true); setEditQuantity(stock.shares.toString()); }}>
+                                        <p className="text-xl font-black text-slate-900 tracking-tighter">
+                                            {stock.shares} <span className="text-sm font-bold text-slate-400">Titres</span>
+                                        </p>
+                                        <div className="p-1.5 rounded-full hover:bg-slate-100 transition-colors">
+                                            <Edit2 size={12} className="text-slate-300 group-hover/edit:text-blue-500 transition-colors" />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
                             <div className="flex items-center gap-3">
                                 <div className="text-right hidden sm:block">
-                                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">Focus</p>
-                                    <p className="text-[10px] font-black text-slate-900 uppercase">Détails</p>
+                                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">Valeur</p>
+                                    <p className="text-[12px] font-black text-slate-700 uppercase">
+                                        {(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                                    </p>
                                 </div>
                                 <div className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 group-hover/card:bg-slate-900 group-hover/card:text-white group-hover/card:border-slate-900 transition-all shadow-sm">
                                     <Info size={18} />
@@ -257,17 +295,17 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                                 </p>
                             </div>
 
-                            {aiSignal?.stopLoss && (
-                                <div className="p-5 bg-rose-500/10 border border-rose-500/20 rounded-[2rem] flex items-center gap-4 animate-pulse-slow">
-                                    <div className="p-3 bg-rose-500/20 rounded-xl text-rose-500">
-                                        <AlertTriangle size={20} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-1">Stop Loss de sécurité</p>
-                                        <p className="text-2xl font-black text-white tracking-tighter">{aiSignal.stopLoss} €</p>
-                                    </div>
+                            <div className="grid grid-cols-2 gap-4 mt-8">
+                                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                                    <p className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Cible IDÉALE</p>
+                                    <p className="text-lg font-bold text-emerald-400">{targetPrice.toFixed(2)}</p>
                                 </div>
-                            )}
+                                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                                    <p className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Stop Loss</p>
+                                    <p className="text-lg font-bold text-rose-400">{aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(2) : (currentPrice * 0.9).toFixed(2)}</p>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -280,8 +318,8 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                     </div>
                 </div>
 
-            </div>
-        </div>
+            </div >
+        </div >
 
     );
 }

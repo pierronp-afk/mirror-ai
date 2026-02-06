@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
 import { useMarketData } from '@/hooks/useMarketData';
@@ -33,7 +33,7 @@ import StockCard from '@/components/StockCard';
  */
 
 export default function Dashboard() {
-  const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
+  const { stocks, addStock, removeStock, updateStock, updateStockQuantity, setStocks, loading: portfolioLoading } = usePortfolio();
   const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
   const { analyzePortfolio, analyzeStock, askQuestion, uploadTradingDocument, hasTradingDocs, analysis, isAnalyzing, error: aiError } = useAI();
 
@@ -75,6 +75,26 @@ export default function Dashboard() {
   const handleRemoveStock = (symbol: string) => {
     removeStock(symbol);
   };
+
+  // Sync zero-price stocks with market prices once loaded
+  useEffect(() => {
+    if (portfolioLoading) return;
+
+    const stocksToSync = stocks.filter(s =>
+      (s.avgPrice === 0 || !s.avgPrice) &&
+      effectiveMarketPrices[s.symbol]?.price > 0
+    );
+
+    if (stocksToSync.length > 0) {
+      stocksToSync.forEach(s => {
+        const marketPrice = effectiveMarketPrices[s.symbol].price;
+        if (updateStock) {
+          console.log(`Syncing price for ${s.symbol}: ${marketPrice}`);
+          updateStock(s.symbol, s.shares, marketPrice, s.name);
+        }
+      });
+    }
+  }, [stocks, effectiveMarketPrices, portfolioLoading, updateStock]);
 
   const handleImportPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -538,6 +558,7 @@ export default function Dashboard() {
                   marketData={effectiveMarketPrices[stock.symbol]}
                   aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
                   onRemove={handleRemoveStock}
+                  onUpdateQuantity={updateStockQuantity}
                   onRefresh={async (symbol) => {
                     try {
                       // 1. Données de marché
