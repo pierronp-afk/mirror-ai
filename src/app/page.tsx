@@ -1,16 +1,19 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAI } from '@/hooks/useAI';
 import { useMarketData } from '@/hooks/useMarketData';
+import { useMarketRefresh } from '@/hooks/useMarketRefresh';
 import { usePortfolio } from '@/hooks/usePortfolio';
-import { Stock, AISignal } from '@/types';
+import { Stock, AISignal, MarketPrices } from '@/types';
 import AddStockModal from '@/components/AddStockModal';
+import OpportunitiesSection from '@/components/OpportunitiesSection';
+import PortfolioChart from '@/components/PortfolioChart';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload, Clock, Target, Rocket,
-  PieChart as PieChartIcon, BarChart3, ArrowUpRight, ArrowDownRight
+  PieChart as PieChartIcon, BarChart3, ArrowUpRight, ArrowDownRight, RefreshCw
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -32,7 +35,7 @@ import StockCard from '@/components/StockCard';
 export default function Dashboard() {
   const { stocks, addStock, removeStock, setStocks, loading: portfolioLoading } = usePortfolio();
   const { user, loading: authLoading, authError, loginAnonymously, loginWithGoogle, logout } = useAuth();
-  const { analyzePortfolio, askQuestion, analysis, isAnalyzing, error: aiError } = useAI();
+  const { analyzePortfolio, askQuestion, uploadTradingDocument, hasTradingDocs, analysis, isAnalyzing, error: aiError } = useAI();
 
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -42,12 +45,28 @@ export default function Dashboard() {
   const [chatHistory, setChatHistory] = useState<{ q: string; a: string }[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [localMarketPrices, setLocalMarketPrices] = useState<MarketPrices>({});
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const tradingDocInputRef = React.useRef<HTMLInputElement>(null);
 
   // Récupération des données réelles du marché
   const stockSymbols = useMemo(() => stocks.map(s => s.symbol), [stocks]);
   const { prices: marketPrices } = useMarketData(stockSymbols);
+
+  // Rafraîchissement automatique toutes les 5 minutes
+  const handleMarketRefresh = useCallback((newPrices: MarketPrices) => {
+    setLocalMarketPrices(newPrices);
+  }, []);
+
+  const { lastUpdate, isRefreshing, manualRefresh } = useMarketRefresh({
+    symbols: stockSymbols,
+    enabled: stocks.length > 0,
+    onRefresh: handleMarketRefresh,
+  });
+
+  // Utiliser les prix locaux s'ils sont disponibles, sinon les prix du hook
+  const effectiveMarketPrices = Object.keys(localMarketPrices).length > 0 ? localMarketPrices : marketPrices;
 
   const handleAddStock = (symbol: string, shares: number, avgPrice: number, name?: string) => {
     addStock({ symbol, shares, avgPrice, name });
@@ -123,8 +142,8 @@ export default function Dashboard() {
   };
 
   const totalValue = useMemo(() => {
-    return stocks.reduce((acc, s) => acc + (s.shares * (marketPrices[s.symbol]?.price || s.avgPrice)), 0);
-  }, [stocks, marketPrices]);
+    return stocks.reduce((acc, s) => acc + (s.shares * (effectiveMarketPrices[s.symbol]?.price || s.avgPrice)), 0);
+  }, [stocks, effectiveMarketPrices]);
 
   const totalCost = useMemo(() => {
     return stocks.reduce((acc, s) => acc + (s.shares * s.avgPrice), 0);
@@ -147,11 +166,11 @@ export default function Dashboard() {
     const sectors: Record<string, number> = {};
     stocks.forEach(s => {
       const sector = s.sector || sectorMapping[s.symbol.toUpperCase()] || 'Autres';
-      const value = s.shares * (marketPrices[s.symbol]?.price || s.avgPrice);
+      const value = s.shares * (effectiveMarketPrices[s.symbol]?.price || s.avgPrice);
       sectors[sector] = (sectors[sector] || 0) + value;
     });
     return Object.entries(sectors).map(([name, value]) => ({ name, value }));
-  }, [stocks, marketPrices]);
+  }, [stocks, effectiveMarketPrices]);
 
   const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -163,14 +182,14 @@ export default function Dashboard() {
     let minGain = Infinity;
 
     stocks.forEach(s => {
-      const current = marketPrices[s.symbol]?.price || s.avgPrice;
+      const current = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
       const gainP = ((current - s.avgPrice) / s.avgPrice) * 100;
       if (gainP > maxGain) { maxGain = gainP; best = s; }
       if (gainP < minGain) { minGain = gainP; worst = s; }
     });
 
     return { best, worst, maxGain, minGain };
-  }, [stocks, marketPrices]);
+  }, [stocks, effectiveMarketPrices]);
 
   if (authLoading || portfolioLoading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -281,6 +300,14 @@ export default function Dashboard() {
             <h1 className="text-xl font-black tracking-tighter uppercase italic text-slate-900">Mirror<span className="text-blue-600">AI</span></h1>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={manualRefresh}
+              disabled={isRefreshing}
+              className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+              title={`Dernière mise à jour: ${new Date(lastUpdate).toLocaleTimeString('fr-FR')}`}
+            >
+              <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
             <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
               <Bell size={20} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
@@ -361,7 +388,7 @@ export default function Dashboard() {
           </div>
 
           <button
-            onClick={() => { setShowAIModal(true); analyzePortfolio(stocks, marketPrices); }}
+            onClick={() => { setShowAIModal(true); analyzePortfolio(stocks, effectiveMarketPrices); }}
             className="bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
           >
             <div className="bg-white/10 p-4 rounded-2xl group-hover:scale-110 transition-transform">
@@ -423,41 +450,7 @@ export default function Dashboard() {
           </div>
 
           {/* GRAPHIQUE DE PILOTAGE */}
-          <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Pilotage & Prévisions</h3>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Projection basée sur l&apos;analyse Mirror AI</p>
-              </div>
-              <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase">
-                Horizon 30 Jours
-              </div>
-            </div>
-            <div className="h-[250px] w-full">
-              {analysis?.forecast ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analysis.forecast}>
-                    <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" hide />
-                    <YAxis hide domain={['auto', 'auto']} />
-                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                    <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-50 rounded-[2rem]">
-                  <BarChart3 size={40} className="mb-2 opacity-50" />
-                  <p className="font-bold italic">Audit requis pour projection</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <PortfolioChart forecast={analysis?.forecast} currentValue={totalValue} />
         </section>
 
         {/* LISTE ACTIFS */}
@@ -499,7 +492,7 @@ export default function Dashboard() {
               <StockCard
                 key={stock.symbol}
                 stock={stock}
-                marketData={marketPrices[stock.symbol]}
+                marketData={effectiveMarketPrices[stock.symbol]}
                 aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
                 onRemove={handleRemoveStock}
               />
@@ -507,50 +500,7 @@ export default function Dashboard() {
           </div>
 
           {/* OPPORTUNITÉS */}
-          {analysis?.opportunities && (
-            <div className="mt-20 space-y-8">
-              <div className="flex items-center gap-4">
-                <div className="bg-slate-900 p-3 rounded-2xl">
-                  <Rocket className="text-white w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Opportunités Significatives</h3>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Détectées par l&apos;IA hors portefeuille</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {analysis.opportunities.map((opp, i) => (
-                  <div key={i} className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl transition-all group">
-                    <div className="flex justify-between items-start mb-6">
-                      <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors">
-                        {opp.symbol[0]}
-                      </div>
-                      <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${opp.horizon === 'FUSIL' ? 'bg-rose-100 text-rose-600' :
-                        opp.horizon === 'LONG' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
-                        }`}>
-                        {opp.horizon}
-                      </span>
-                    </div>
-                    <h4 className="text-xl font-black tracking-tighter mb-1">{opp.symbol}</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 truncate">{opp.name}</p>
-                    <p className="text-xs text-slate-500 mb-6 italic line-clamp-2">&quot;{opp.reason}&quot;</p>
-
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-                      <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Prix Max Achat</p>
-                        <p className="text-sm font-black text-slate-900">{opp.priceMax}€</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Sortie Visée</p>
-                        <p className="text-sm font-black text-emerald-500">{opp.priceExit}€</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {analysis?.opportunities && <OpportunitiesSection opportunities={analysis.opportunities} />}
         </section>
       </main>
 
