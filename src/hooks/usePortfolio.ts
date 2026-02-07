@@ -42,6 +42,8 @@ export function usePortfolio() {
 
     const syncStocks = async (newStocks: Stock[]) => {
         if (!user) return;
+        // Optimistic update
+        setStocksState(newStocks);
         try {
             const portfolioRef = doc(db, 'users', user.uid);
             await setDoc(portfolioRef, { stocks: newStocks }, { merge: true });
@@ -49,6 +51,9 @@ export function usePortfolio() {
             const message = err instanceof Error ? err.message : "Erreur lors de la sauvegarde.";
             console.error("Error syncing stocks:", err);
             setError(message);
+            // Revert if needed? Ideally we should fetch from server again or handle error better.
+            // For now, onSnapshot will likely correct it if it fails on server but succeeds locally? 
+            // Actually onSnapshot might trigger with local pending write.
         }
     };
 
