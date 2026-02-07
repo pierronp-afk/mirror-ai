@@ -119,10 +119,14 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
         }
     };
 
-    const handleSaveEdit = (e: React.MouseEvent) => {
+    const handleSaveEdit = (e: React.MouseEvent | React.KeyboardEvent) => {
         e.stopPropagation();
-        const qty = parseFloat(editQuantity);
-        const price = parseFloat(editAvgPrice);
+        // Replace comma with dot for French locale support
+        const qtyStr = editQuantity.replace(',', '.');
+        const priceStr = editAvgPrice.replace(',', '.');
+
+        const qty = parseFloat(qtyStr);
+        const price = parseFloat(priceStr);
 
         if (!isNaN(qty) && qty > 0 && onUpdateQuantity) {
             onUpdateQuantity(stock.symbol, qty);
