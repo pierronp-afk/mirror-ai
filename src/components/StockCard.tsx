@@ -12,7 +12,7 @@ interface StockCardProps {
     onUpdateStock?: (symbol: string, shares: number, avgPrice: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.08, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.18, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -251,7 +251,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                 </span>
                                 {isUS && exchangeRate && (
                                     <span className="text-[7px] font-bold text-slate-400 leading-none">
-                                        (1€ = {exchangeRate.toFixed(4)}$)
+                                        (1€ = {exchangeRate.toFixed(4)}$ {exchangeRate === 1.18 ? '⚠️ DÉFAUT' : ''})
                                     </span>
                                 )}
                             </div>

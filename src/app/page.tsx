@@ -51,7 +51,7 @@ export default function Dashboard() {
   const tradingDocInputRef = React.useRef<HTMLInputElement>(null);
 
   // Récupération des données réelles du marché
-  const stockSymbols = useMemo(() => [...stocks.map(s => s.symbol), 'OANDA:EUR_USD'], [stocks]);
+  const stockSymbols = useMemo(() => [...stocks.map(s => s.symbol), 'OANDA:EUR_USD', 'FX:EURUSD'], [stocks]);
 
   // hook passif pour l'initialisation (sans auto-rafraîchissement agressif)
   const { prices: initialPrices } = useMarketData(stockSymbols);
@@ -73,8 +73,11 @@ export default function Dashboard() {
   }, [initialPrices, localMarketPrices]);
 
   // Taux de change EUR/USD (1 EUR = x USD)
-  // Si OANDA:EUR_USD = 1.08, alors 1 $ = 1 / 1.08 €
-  const eurUsdRate = effectiveMarketPrices['OANDA:EUR_USD']?.price || 1.08;
+  const eurUsdRate = effectiveMarketPrices['FX:EURUSD']?.price || effectiveMarketPrices['OANDA:EUR_USD']?.price || 1.18;
+
+  if (Object.keys(effectiveMarketPrices).length > 0) {
+    console.log(`📊 Rate Debug: FX: ${effectiveMarketPrices['FX:EURUSD']?.price}, OANDA: ${effectiveMarketPrices['OANDA:EUR_USD']?.price}, Using: ${eurUsdRate}`);
+  }
 
 
   const handleAddStock = (symbol: string, shares: number, avgPrice: number, name?: string) => {
