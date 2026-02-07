@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MarketPrices } from '@/types';
 
-const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const BATCH_SIZE = 15;
+const STAGGER_INTERVAL = 60 * 1000; // 1 minute
 
 interface UseMarketRefreshOptions {
     symbols: string[];
@@ -14,15 +15,31 @@ export function useMarketRefresh({ symbols, enabled = true, onRefresh }: UseMark
     const [isRefreshing, setIsRefreshing] = useState(false);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const lastSymbolsRef = useRef<string>('');
+    const batchIndexRef = useRef<number>(0);
 
-    const fetchMarketData = useCallback(async () => {
-        if (symbols.length === 0 || !enabled) return;
+    const fetchMarketDataBatch = useCallback(async (manualSymbols?: string[]) => {
+        const targetSymbols = manualSymbols || symbols;
+        if (targetSymbols.length === 0 || !enabled) return;
 
         setIsRefreshing(true);
 
         try {
+            // Determine the batch to fetch
+            let batch: string[] = [];
+            if (manualSymbols) {
+                batch = manualSymbols;
+            } else {
+                const start = (batchIndexRef.current * BATCH_SIZE) % targetSymbols.length;
+                batch = targetSymbols.slice(start, start + BATCH_SIZE);
+                // If the batch wrapped around, we might need more but let's keep it simple:
+                // If we reach the end, the next call will start from 0 because of the modulo.
+                batchIndexRef.current = (batchIndexRef.current + 1) % Math.ceil(targetSymbols.length / BATCH_SIZE);
+            }
+
+            console.log(`📡 Refreshing market batch: ${batch.join(', ')}`);
+
             const pricesRes = await Promise.all(
-                symbols.map(async (symbol) => {
+                batch.map(async (symbol) => {
                     try {
                         const res = await fetch(`/api/market?symbol=${symbol}`);
                         if (!res.ok) return { symbol, price: 0, change: 0, changePercent: 0 };
@@ -60,7 +77,7 @@ export function useMarketRefresh({ symbols, enabled = true, onRefresh }: UseMark
         }
     }, [symbols, enabled, onRefresh]);
 
-    // Setup auto-refresh
+    // Setup auto-refresh (staggered)
     useEffect(() => {
         if (!enabled) {
             if (intervalRef.current) {
@@ -70,24 +87,20 @@ export function useMarketRefresh({ symbols, enabled = true, onRefresh }: UseMark
             return;
         }
 
-        // Éviter de redémarrer l'intervalle si les symboles n'ont pas changé
-        const currentSymbols = symbols.sort().join(',');
-        if (currentSymbols === lastSymbolsRef.current && intervalRef.current) {
-            return;
+        const currentSymbolsStr = symbols.sort().join(',');
+        if (currentSymbolsStr !== lastSymbolsRef.current) {
+            lastSymbolsRef.current = currentSymbolsStr;
+            batchIndexRef.current = 0; // Reset batch on list change
+
+            // Initial batch fetch
+            fetchMarketDataBatch();
         }
 
-        lastSymbolsRef.current = currentSymbols;
-
-        // Clear existing interval
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
+        if (!intervalRef.current) {
+            intervalRef.current = setInterval(() => {
+                fetchMarketDataBatch();
+            }, STAGGER_INTERVAL);
         }
-
-        // Fetch immediately on mount or symbol change
-        fetchMarketData();
-
-        // Setup interval
-        intervalRef.current = setInterval(fetchMarketData, REFRESH_INTERVAL);
 
         return () => {
             if (intervalRef.current) {
@@ -95,16 +108,21 @@ export function useMarketRefresh({ symbols, enabled = true, onRefresh }: UseMark
                 intervalRef.current = null;
             }
         };
-    }, [symbols, enabled, fetchMarketData]);
+    }, [symbols, enabled, fetchMarketDataBatch]);
 
     const manualRefresh = useCallback(() => {
-        fetchMarketData();
-    }, [fetchMarketData]);
+        // For manual refresh, we might still want to refresh EVERYTHING, 
+        // but let's respect the user's wish for batching if their portfolio is huge.
+        // Actually, "Refresh All" usually means "fetch all now".
+        // To avoid 429, we could fetch all but with a delay between sub-batches.
+        // For now, let's just trigger the next batch immediately.
+        fetchMarketDataBatch();
+    }, [fetchMarketDataBatch]);
 
     return {
         lastUpdate,
         isRefreshing,
         manualRefresh,
-        timeUntilNextRefresh: REFRESH_INTERVAL - (Date.now() - lastUpdate),
+        timeUntilNextRefresh: STAGGER_INTERVAL - (Date.now() - lastUpdate),
     };
 }

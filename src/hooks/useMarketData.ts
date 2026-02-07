@@ -93,11 +93,11 @@ export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 100
         fetchPrices();
 
         // Rafraîchissement périodique
-        const intervalId = setInterval(fetchPrices, refreshInterval);
+        const intervalId = refreshInterval > 0 ? setInterval(fetchPrices, refreshInterval) : null;
 
         return () => {
             isMounted = false;
-            clearInterval(intervalId);
+            if (intervalId) clearInterval(intervalId);
         };
     }, [symbolsKey, refreshInterval]); // On dépend de la clé stable, pas de la ref du tableau !
 

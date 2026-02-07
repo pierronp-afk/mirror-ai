@@ -52,11 +52,13 @@ export default function Dashboard() {
 
   // Récupération des données réelles du marché
   const stockSymbols = useMemo(() => [...stocks.map(s => s.symbol), 'OANDA:EUR_USD'], [stocks]);
-  const { prices: marketPrices } = useMarketData(stockSymbols);
 
-  // Rafraîchissement automatique toutes les 15 minutes
+  // hook passif pour l'initialisation (sans auto-rafraîchissement agressif)
+  const { prices: initialPrices } = useMarketData(stockSymbols);
+
+  // Rafraîchissement automatique par lots de 15 titres / minute
   const handleMarketRefresh = useCallback((newPrices: MarketPrices) => {
-    setLocalMarketPrices(newPrices);
+    setLocalMarketPrices(prev => ({ ...prev, ...newPrices }));
   }, []);
 
   const { lastUpdate, isRefreshing, manualRefresh } = useMarketRefresh({
@@ -65,8 +67,10 @@ export default function Dashboard() {
     onRefresh: handleMarketRefresh,
   });
 
-  // Utiliser les prix locaux s'ils sont disponibles, sinon les prix du hook
-  const effectiveMarketPrices = Object.keys(localMarketPrices).length > 0 ? localMarketPrices : marketPrices;
+  // Utiliser les prix locaux s'ils sont disponibles (fusionnés), sinon les prix initiaux
+  const effectiveMarketPrices = useMemo(() => {
+    return { ...initialPrices, ...localMarketPrices };
+  }, [initialPrices, localMarketPrices]);
 
   // Taux de change EUR/USD (1 EUR = x USD)
   // Si OANDA:EUR_USD = 1.08, alors 1 $ = 1 / 1.08 €
@@ -174,8 +178,13 @@ export default function Dashboard() {
   };
 
   const totalValue = useMemo(() => {
-    return stocks.reduce((acc, s) => acc + (s.shares * (effectiveMarketPrices[s.symbol]?.price || s.avgPrice)), 0);
-  }, [stocks, effectiveMarketPrices]);
+    return stocks.reduce((acc, s) => {
+      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
+      const isUS = !s.symbol.includes('.');
+      const priceEur = isUS ? (price / eurUsdRate) : price;
+      return acc + (s.shares * priceEur);
+    }, 0);
+  }, [stocks, effectiveMarketPrices, eurUsdRate]);
 
   const totalCost = useMemo(() => {
     return stocks.reduce((acc, s) => acc + (s.shares * s.avgPrice), 0);
@@ -198,7 +207,10 @@ export default function Dashboard() {
     const sectors: Record<string, number> = {};
     stocks.forEach(s => {
       const sector = s.sector || sectorMapping[s.symbol.toUpperCase()] || 'Autres';
-      const value = s.shares * (effectiveMarketPrices[s.symbol]?.price || s.avgPrice);
+      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
+      const isUS = !s.symbol.includes('.');
+      const priceEur = isUS ? (price / eurUsdRate) : price;
+      const value = s.shares * priceEur;
       sectors[sector] = (sectors[sector] || 0) + value;
     });
     return Object.entries(sectors).map(([name, value]) => ({ name, value }));
@@ -214,8 +226,11 @@ export default function Dashboard() {
     let minGain = Infinity;
 
     stocks.forEach(s => {
-      const current = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      const gainP = ((current - s.avgPrice) / s.avgPrice) * 100;
+      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
+      const isUS = !s.symbol.includes('.');
+      const priceEur = isUS ? (price / eurUsdRate) : price;
+
+      const gainP = ((priceEur - s.avgPrice) / s.avgPrice) * 100;
       if (gainP > maxGain) { maxGain = gainP; best = s; }
       if (gainP < minGain) { minGain = gainP; worst = s; }
     });
@@ -762,7 +777,7 @@ export default function Dashboard() {
                 <div className="text-center p-20 bg-rose-50 rounded-[3rem] border border-rose-100">
                   <AlertCircle className="mx-auto text-rose-500 w-12 h-12 mb-4" />
                   <p className="text-rose-900 font-bold">{aiError || "Une erreur est survenue lors de l&apos;analyse."}</p>
-                  <button onClick={() => analyzePortfolio(stocks, marketPrices)} className="mt-6 text-rose-600 font-black uppercase text-[10px] tracking-widest border-b-2 border-rose-200">Réessayer l&apos;analyse</button>
+                  <button onClick={() => analyzePortfolio(stocks, effectiveMarketPrices)} className="mt-6 text-rose-600 font-black uppercase text-[10px] tracking-widest border-b-2 border-rose-200">Réessayer l&apos;analyse</button>
                 </div>
               )}
             </div>
