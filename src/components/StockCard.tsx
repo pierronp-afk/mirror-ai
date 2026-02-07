@@ -272,13 +272,20 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                 <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
                                     <span className="text-slate-500 text-xs font-bold">Titres:</span>
                                     {isEditing ? (
-                                        <div className="inline-block" onClick={e => e.stopPropagation()}>
+                                        <div className="inline-block flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                             <input
                                                 type="number"
                                                 value={editQuantity}
                                                 onChange={e => setEditQuantity(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSaveEdit(e as any);
+                                                    if (e.key === 'Escape') setIsEditing(false);
+                                                }}
                                                 className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
+                                                autoFocus
                                             />
+                                            <button onClick={handleSaveEdit} className="p-1 bg-emerald-500 text-white rounded"><Check size={12} /></button>
+                                            <button onClick={() => setIsEditing(false)} className="p-1 bg-rose-500 text-white rounded"><X size={12} /></button>
                                         </div>
                                     ) : (
                                         <span className="text-emerald-500 font-bold text-lg cursor-pointer hover:bg-slate-100 px-1 rounded transition-colors group/qty">
@@ -295,6 +302,10 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                                 type="number"
                                                 value={editAvgPrice}
                                                 onChange={e => setEditAvgPrice(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSaveEdit(e as any);
+                                                    if (e.key === 'Escape') setIsEditing(false);
+                                                }}
                                                 className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
                                             />
                                             <button onClick={handleSaveEdit} className="p-1 bg-emerald-500 text-white rounded"><Check size={12} /></button>

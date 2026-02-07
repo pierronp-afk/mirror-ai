@@ -613,7 +613,9 @@ export default function Dashboard() {
 
                         // 3. Analyse IA spécifique
                         if (marketData && analyzeStock) {
-                          await analyzeStock(currentStock, marketData.c || currentStock.avgPrice);
+                          const isUS = !currentStock.symbol.includes('.');
+                          const priceEur = isUS ? (marketData.c / eurUsdRate) : marketData.c;
+                          await analyzeStock(currentStock, priceEur);
                         }
                       }
                     } catch (err) {

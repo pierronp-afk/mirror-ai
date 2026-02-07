@@ -76,20 +76,32 @@ export function useAI() {
       if (jsonMatch) {
         const newSignal = JSON.parse(jsonMatch[0]);
 
-        // Mettre à jour l'état local si une analyse existe déjà
-        if (analysis) {
-          setAnalysis(prev => {
-            if (!prev) return null;
-            const exists = prev.signals.find(s => s.symbol === stock.symbol);
-            let newSignals;
-            if (exists) {
-              newSignals = prev.signals.map(s => s.symbol === stock.symbol ? newSignal : s);
-            } else {
-              newSignals = [...prev.signals, newSignal];
-            }
-            return { ...prev, signals: newSignals };
-          });
-        }
+        // Mettre à jour l'état local
+        setAnalysis(prev => {
+          if (!prev) {
+            // Initialiser un état d'analyse minimal si inexistant
+            return {
+              health: "Analyse individuelle",
+              healthDesc: `Analyse flash de ${stock.symbol} effectuée.`,
+              prediction: newSignal.advice,
+              predictionDesc: newSignal.reason,
+              signals: [newSignal],
+              opportunities: [],
+              newsHighlight: "",
+              balanceAdvice: "",
+              forecast: [],
+              lastUpdated: Date.now()
+            };
+          }
+          const exists = prev.signals.find(s => s.symbol === stock.symbol);
+          let newSignals;
+          if (exists) {
+            newSignals = prev.signals.map(s => s.symbol === stock.symbol ? newSignal : s);
+          } else {
+            newSignals = [...prev.signals, newSignal];
+          }
+          return { ...prev, signals: newSignals, lastUpdated: Date.now() };
+        });
 
         return newSignal;
       }
