@@ -273,12 +273,17 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             <div className="space-y-1">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-slate-500 text-xs font-bold">Valeur totale:</span>
-                                    <span className="text-xl font-black text-slate-900">{totalValueEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                                    <span className="text-xl font-black text-slate-900">
+                                        {rawPrice > 0
+                                            ? totalValueEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+                                            : <span className="text-slate-400 text-lg">---</span>
+                                        }
+                                    </span>
                                 </div>
                                 <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
                                     <span className="text-slate-500 text-xs font-bold">Titres:</span>
                                     {isEditing ? (
-                                        <div className="inline-block flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                             <input
                                                 type="number"
                                                 value={editQuantity}
@@ -303,7 +308,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                 <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
                                     <span className="text-slate-500 text-xs font-bold">Prix d'achat moyen:</span>
                                     {isEditing ? (
-                                        <div className="inline-block flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                             <input
                                                 type="number"
                                                 value={editAvgPrice}
