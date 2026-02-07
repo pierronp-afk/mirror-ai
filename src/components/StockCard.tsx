@@ -269,7 +269,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                     <span className="text-slate-500 text-xs font-bold">Valeur totale:</span>
                                     <span className="text-xl font-black text-slate-900">{totalValueEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
                                 </div>
-                                <div className="flex items-baseline gap-2">
+                                <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
                                     <span className="text-slate-500 text-xs font-bold">Titres:</span>
                                     {isEditing ? (
                                         <div className="inline-block" onClick={e => e.stopPropagation()}>
@@ -281,7 +281,10 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                             />
                                         </div>
                                     ) : (
-                                        <span className="text-emerald-500 font-bold text-lg">{stock.shares}</span>
+                                        <span className="text-emerald-500 font-bold text-lg cursor-pointer hover:bg-slate-100 px-1 rounded transition-colors group/qty">
+                                            {stock.shares}
+                                            <Edit2 size={10} className="inline ml-2 text-slate-300 opacity-0 group-hover/qty:opacity-100 transition-opacity" />
+                                        </span>
                                     )}
                                 </div>
                                 <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
