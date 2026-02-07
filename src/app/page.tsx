@@ -51,7 +51,7 @@ export default function Dashboard() {
   const tradingDocInputRef = React.useRef<HTMLInputElement>(null);
 
   // Récupération des données réelles du marché
-  const stockSymbols = useMemo(() => stocks.map(s => s.symbol), [stocks]);
+  const stockSymbols = useMemo(() => [...stocks.map(s => s.symbol), 'OANDA:EUR_USD'], [stocks]);
   const { prices: marketPrices } = useMarketData(stockSymbols);
 
   // Rafraîchissement automatique toutes les 15 minutes
@@ -68,12 +68,24 @@ export default function Dashboard() {
   // Utiliser les prix locaux s'ils sont disponibles, sinon les prix du hook
   const effectiveMarketPrices = Object.keys(localMarketPrices).length > 0 ? localMarketPrices : marketPrices;
 
+  // Taux de change EUR/USD (1 EUR = x USD)
+  // Si OANDA:EUR_USD = 1.08, alors 1 $ = 1 / 1.08 €
+  const eurUsdRate = effectiveMarketPrices['OANDA:EUR_USD']?.price || 1.08;
+
+
   const handleAddStock = (symbol: string, shares: number, avgPrice: number, name?: string) => {
     addStock({ symbol, shares, avgPrice, name });
   };
 
   const handleRemoveStock = (symbol: string) => {
     removeStock(symbol);
+  };
+
+  const handleUpdateAvgPrice = (symbol: string, newPrice: number) => {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (stock && updateStock) {
+      updateStock(symbol, stock.shares, newPrice, stock.name);
+    }
   };
 
   // Sync zero-price stocks with market prices once loaded
@@ -557,8 +569,10 @@ export default function Dashboard() {
                   stock={stock}
                   marketData={effectiveMarketPrices[stock.symbol]}
                   aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
+                  exchangeRate={eurUsdRate}
                   onRemove={handleRemoveStock}
                   onUpdateQuantity={updateStockQuantity}
+                  onUpdateAvgPrice={handleUpdateAvgPrice}
                   onRefresh={async (symbol) => {
                     try {
                       // 1. Données de marché
@@ -769,6 +783,7 @@ export default function Dashboard() {
         <AddStockModal
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddStock}
+          exchangeRate={eurUsdRate}
         />
       )}
     </div>

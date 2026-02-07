@@ -6,26 +6,53 @@ interface StockCardProps {
     stock: Stock;
     marketData?: { price: number; change: number; changePercent: number };
     aiSignal?: AISignal;
+    exchangeRate?: number; // EUR/USD rate (e.g. 1.08)
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
     onUpdateQuantity?: (symbol: string, newQuantity: number) => void;
+    onUpdateAvgPrice?: (symbol: string, newPrice: number) => void; // New prop for updating PRU
 }
 
-export default function StockCard({ stock, marketData, aiSignal, onRemove, onRefresh, onUpdateQuantity }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.08, onRemove, onRefresh, onUpdateQuantity, onUpdateAvgPrice }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editQuantity, setEditQuantity] = useState(stock.shares.toString());
+    const [editAvgPrice, setEditAvgPrice] = useState(stock.avgPrice.toString());
 
-    const currentPrice = marketData?.price || stock.avgPrice;
-    const gain = (currentPrice - stock.avgPrice) * stock.shares;
-    const gainPercent = (gain / (stock.avgPrice * stock.shares)) * 100;
-    const isPos = gain >= 0;
+    // Currency Detection
+    const isUS = !stock.symbol.includes('.'); // Simple assumption: no dot (like .PA) means US
+    const currencySymbol = isUS ? '$' : '€';
 
-    const dailyChange = marketData?.changePercent || 0;
-    const isDailyPos = dailyChange >= 0;
-    const dailyGain = (marketData?.change || 0) * stock.shares;
-    const isDailyGainPos = dailyGain >= 0;
+    // Current Price Logic
+    // API returns price in trading currency (USD for US stocks, EUR for PA stocks)
+    const rawPrice = marketData?.price || 0;
+
+    // Converted Price (for Total Value calculation in EUR)
+    // If US stock, rawPrice is USD. We need EUR.
+    // 1 EUR = 1.08 USD => 1 USD = 1/1.08 EUR.
+    // Price(EUR) = Price(USD) / Rate
+    const currentPriceEur = isUS ? (rawPrice / exchangeRate) : rawPrice;
+
+    // Use stored avgPrice (PRU) which is assumed to be in EUR based on User Input
+    const avgPrice = stock.avgPrice;
+
+    // Gains in EUR
+    const totalValueEur = stock.shares * currentPriceEur;
+    const totalCostEur = stock.shares * avgPrice;
+    const gainEur = totalValueEur - totalCostEur;
+    const gainPercent = totalCostEur > 0 ? (gainEur / totalCostEur) * 100 : 0;
+    const isPos = gainEur >= 0;
+
+    const dailyChangePercent = marketData?.changePercent || 0;
+    const isDailyPos = dailyChangePercent >= 0;
+
+    // Daily Gain in EUR
+    // marketData.change is in trading currency
+    const rawDailyChange = marketData?.change || 0;
+    const dailyChangeEur = isUS ? (rawDailyChange / exchangeRate) : rawDailyChange;
+    const dailyGainEur = dailyChangeEur * stock.shares;
+    const isDailyGainPos = dailyGainEur >= 0;
 
     // Logo mapping for common symbols
     const symbolToDomain: Record<string, string> = {
@@ -76,7 +103,6 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
 
     const adviceColor = getAdviceColor();
     const adviceText = aiSignal?.advice || (isPos ? "Renforcer" : "Alléger");
-    const percentText = aiSignal?.percentRecommendation ? ` ${aiSignal.percentRecommendation}%` : '';
 
     const handleRefresh = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -87,23 +113,37 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
         }
     };
 
-    const handleSaveQuantity = (e: React.MouseEvent) => {
+    const handleSaveEdit = (e: React.MouseEvent) => {
         e.stopPropagation();
         const qty = parseFloat(editQuantity);
+        const price = parseFloat(editAvgPrice);
+
         if (!isNaN(qty) && qty > 0 && onUpdateQuantity) {
             onUpdateQuantity(stock.symbol, qty);
-            setIsEditing(false);
         }
+
+        // We need a way to update price too. 
+        // Assuming we will add onUpdateAvgPrice to props or use a combined update
+        if (!isNaN(price) && price >= 0 && onUpdateQuantity) {
+            // Temporary hack: onUpdateQuantity might need to change to onUpdateStock(symbol, qty, price)
+            // But for now, we only have onUpdateQuantity in props.
+            // I will implement a local fix in page.tsx to support this or just pass a new prop.
+            // EDIT: I added onUpdateAvgPrice to interface.
+            if (onUpdateAvgPrice) onUpdateAvgPrice(stock.symbol, price);
+        }
+
+        setIsEditing(false);
     };
 
     // Calcul de la progression vers la cible
-    const targetPrice = aiSignal?.targetPrice || (currentPrice * 1.15); // Fallback target +15%
+    // Target is usually in Trading Currency (USD for US stocks)
+    // We compare with rawPrice (USD)
+    const targetPrice = aiSignal?.targetPrice || (rawPrice * 1.15);
     let progress = 0;
-    // Simplification visuelle : on montre où on est entre 0 et Target
-    progress = Math.min(100, Math.max(5, (currentPrice / targetPrice) * 100));
+    progress = Math.min(100, Math.max(5, (rawPrice / targetPrice) * 100));
 
     return (
-        <div className="relative h-[520px] w-full cursor-pointer perspective-1000 group/card" onClick={() => !isEditing && setFlipped(!flipped)}>
+        <div className="relative h-[580px] w-full cursor-pointer perspective-1000 group/card" onClick={() => !isEditing && setFlipped(!flipped)}>
             <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
 
                 {/* FRONT FACE */}
@@ -129,23 +169,28 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                                 />
                             </div>
                             <div>
-                                {/* NOM COMPLET EN GRAS */}
-                                <h3 className="text-2xl font-black tracking-tight text-slate-900 leading-none mb-1">
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900 leading-none mb-1 line-clamp-2">
                                     {stock.name || stock.symbol}
                                 </h3>
-                                {/* SYMBOLE EN PETIT GRIS EN DESSOUS */}
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                    {stock.symbol}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                        {stock.symbol}
+                                    </p>
+                                    <span className={`text-[10px] font-black ${isDailyPos ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                        {/* NOTE: Design shows variation next to name? No, design shows it top right or under name. 
+                                           User requested: "Variation du jour comme c’est à côté du nom." 
+                                           Let's put it here.
+                                       */}
+                                        {isDailyPos ? '↘' : '↗'} {dailyChangePercent.toFixed(2)}%
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                            {/* BOUTON ACTUALISER */}
                             <button
                                 onClick={handleRefresh}
                                 disabled={isRefreshing}
                                 className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100 disabled:opacity-50"
-                                title="Actualiser les données"
                             >
                                 <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
                             </button>
@@ -155,24 +200,31 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                                     onRemove(stock.symbol);
                                 }}
                                 className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
-                                title="Supprimer"
                             >
                                 <Trash2 size={16} />
                             </button>
-                            <div className="text-right mt-1">
-                                <div className={`flex items-center gap-1 font-black text-sm justify-end ${isDailyPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {isDailyPos ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                    {dailyChange.toFixed(2)}%
-                                </div>
-                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Variation Jour</p>
-                            </div>
                         </div>
                     </div>
 
-                    {/* AI Advice Section - THEME CLAIR CORRIGÉ */}
-                    {/* NEW: 3-ZONE ACTION CAPSULE */}
-                    <div className="mt-6 mx-auto w-full bg-slate-50 border border-slate-200 rounded-full p-2 flex items-center shadow-inner relative overflow-hidden group-hover/card:shadow-md transition-shadow">
-                        {/* Zone 1: Action Button */}
+                    {/* PERFORMANCE GLOBALE (Design matches user screenshot) */}
+                    <div className="mt-6">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Performance Globale</p>
+                        <div className="flex items-baseline gap-3">
+                            <h4 className={`text-4xl font-black tracking-tighter ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                {isPos ? '+' : ''}{gainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                            </h4>
+                            <span className={`text-sm font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                ({isPos ? '+' : ''}{gainPercent.toFixed(2)}%)
+                            </span>
+                        </div>
+                        <p className="text-xs font-medium text-slate-400 mt-1">
+                            Gain Jour: {isDailyGainPos ? '+' : ''}{dailyGainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} ({dailyChangePercent.toFixed(2)}%)
+                        </p>
+                    </div>
+
+                    {/* CAPSULE */}
+                    <div className="mt-6 w-full bg-slate-50 border border-slate-200 rounded-full p-2 flex items-center shadow-inner relative overflow-hidden">
+                        {/* Zone 1: Action */}
                         <div className={`relative px-6 py-3 rounded-full shadow-lg z-10 flex items-center justify-center min-w-[120px] ${adviceColor === 'rose' ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white' :
                             adviceColor === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white' :
                                 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
@@ -180,11 +232,11 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                             <span className="text-[10px] font-black uppercase tracking-widest leading-none">{adviceText}</span>
                         </div>
 
-                        {/* Zone 2: Target Price Progress */}
+                        {/* Zone 2: Target (In Trading Currency usually) */}
                         <div className="flex-1 px-4 flex flex-col items-center justify-center relative z-0">
                             <div className="w-full flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                <span>{currentPrice.toFixed(0)}</span>
-                                <span>Cible: {targetPrice.toFixed(0)} {stock.symbol.includes('.PA') ? '€' : '$'}</span>
+                                <span>Cible:</span>
+                                <span>{targetPrice.toFixed(0)} {isUS ? '$' : '€'}</span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                 <div
@@ -194,90 +246,72 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                                         }`}
                                 />
                             </div>
+                            <div className="mt-1 text-[9px] font-black text-slate-500">
+                                {rawPrice.toFixed(2)} {isUS ? '$' : '€'}
+                            </div>
                         </div>
 
-                        {/* Zone 3: Stop Loss / Risk */}
-                        <div className="pr-4 pl-2 border-l border-slate-200 flex flex-col items-end justify-center min-w-[70px]">
+                        {/* Zone 3: Stop */}
+                        <div className="pr-4 pl-2 border-l border-slate-200 flex flex-col items-end justify-center min-w-[50px]">
                             <span className="text-[8px] font-black text-rose-400 uppercase tracking-wider leading-none mb-0.5">Stop</span>
                             <span className="text-[10px] font-bold text-slate-600 leading-none">
-                                {aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(0) : (currentPrice * 0.9).toFixed(0)}
+                                {aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(0) : (rawPrice * 0.9).toFixed(0)}
                             </span>
                         </div>
                     </div>
 
-                    {/* Performance Section (Total Gain + Daily Gain) */}
-                    <div className="mt-auto space-y-8">
-                        <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-8">
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Gain Latent</p>
-                                <p className={`text-2xl font-black tracking-tighter ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {isPos ? '+' : ''}{gain.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                                </p>
-                                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-1 rounded-md text-[10px] font-black ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                                    {isPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                    {isPos ? '+' : ''}{gainPercent.toFixed(2)}%
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Profit Jour</p>
-                                <p className={`text-2xl font-black tracking-tighter ${isDailyGainPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {isDailyGainPos ? '+' : ''}{dailyGain.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                                </p>
-                                <p className="text-[10px] font-bold text-slate-300 italic mt-1">Séance en cours</p>
-                            </div>
-                        </div>
 
-                        <div className="flex justify-between items-end border-t border-slate-100 pt-6">
-                            {/* EDITABLE QUANTITY */}
-                            <div onClick={(e) => e.stopPropagation()}>
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Position</p>
-                                {isEditing ? (
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            value={editQuantity}
-                                            onChange={(e) => setEditQuantity(e.target.value)}
-                                            className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-500 shadow-inner"
-                                            autoFocus
-                                        />
-                                        <button onClick={handleSaveQuantity} className="p-1.5 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 shadow-sm transition-colors">
-                                            <Check size={14} />
-                                        </button>
-                                        <button onClick={() => { setIsEditing(false); setEditQuantity(stock.shares.toString()) }} className="p-1.5 bg-rose-500 text-white rounded-md hover:bg-rose-600 shadow-sm transition-colors">
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 group/edit cursor-pointer" onClick={() => { setIsEditing(true); setEditQuantity(stock.shares.toString()); }}>
-                                        <p className="text-xl font-black text-slate-900 tracking-tighter">
-                                            {stock.shares} <span className="text-sm font-bold text-slate-400">Titres</span>
-                                        </p>
-                                        <div className="p-1.5 rounded-full hover:bg-slate-100 transition-colors">
-                                            <Edit2 size={12} className="text-slate-300 group-hover/edit:text-blue-500 transition-colors" />
+                    {/* Bottom Section: Total Value, Shares, Buy Price */}
+                    <div className="mt-auto space-y-2 pt-6 border-t border-slate-100">
+                        <div className="flex justify-between items-end">
+                            <div className="space-y-1">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-slate-500 text-xs font-bold">Valeur totale:</span>
+                                    <span className="text-xl font-black text-slate-900">{totalValueEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-slate-500 text-xs font-bold">Titres:</span>
+                                    {isEditing ? (
+                                        <div className="inline-block" onClick={e => e.stopPropagation()}>
+                                            <input
+                                                type="number"
+                                                value={editQuantity}
+                                                onChange={e => setEditQuantity(e.target.value)}
+                                                className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
+                                            />
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <div className="text-right hidden sm:block">
-                                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">Valeur</p>
-                                    <p className="text-[12px] font-black text-slate-700 uppercase">
-                                        {(stock.shares * currentPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                                    </p>
+                                    ) : (
+                                        <span className="text-emerald-500 font-bold text-lg">{stock.shares}</span>
+                                    )}
                                 </div>
-                                <div className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 group-hover/card:bg-slate-900 group-hover/card:text-white group-hover/card:border-slate-900 transition-all shadow-sm">
-                                    <Info size={18} />
+                                <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
+                                    <span className="text-slate-500 text-xs font-bold">Prix d'achat moyen:</span>
+                                    {isEditing ? (
+                                        <div className="inline-block flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                            <input
+                                                type="number"
+                                                value={editAvgPrice}
+                                                onChange={e => setEditAvgPrice(e.target.value)}
+                                                className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
+                                            />
+                                            <button onClick={handleSaveEdit} className="p-1 bg-emerald-500 text-white rounded"><Check size={12} /></button>
+                                            <button onClick={() => setIsEditing(false)} className="p-1 bg-rose-500 text-white rounded"><X size={12} /></button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-slate-900 font-bold text-lg cursor-pointer hover:bg-slate-100 px-1 rounded transition-colors group/price">
+                                            {avgPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                                            <Edit2 size={10} className="inline ml-2 text-slate-300 opacity-0 group-hover/price:opacity-100 transition-opacity" />
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* BACK FACE */}
+                {/* BACK FACE (Existing) */}
                 <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between border-2 border-blue-500 shadow-2xl shadow-blue-500/20 text-white overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-
                     <div>
                         <div className="flex items-center gap-3 mb-10">
                             <div className="bg-blue-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20">
@@ -302,10 +336,9 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
                                 </div>
                                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                                     <p className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Stop Loss</p>
-                                    <p className="text-lg font-bold text-rose-400">{aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(2) : (currentPrice * 0.9).toFixed(2)}</p>
+                                    <p className="text-lg font-bold text-rose-400">{aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(2) : (rawPrice * 0.9).toFixed(2)}</p>
                                 </div>
                             </div>
-
                         </div>
                     </div>
 
@@ -320,6 +353,5 @@ export default function StockCard({ stock, marketData, aiSignal, onRemove, onRef
 
             </div >
         </div >
-
     );
 }

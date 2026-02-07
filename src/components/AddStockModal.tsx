@@ -12,9 +12,10 @@ interface StockSearchResult {
 interface AddStockModalProps {
     onClose: () => void;
     onAdd: (symbol: string, shares: number, avgPrice: number, name?: string) => void;
+    exchangeRate?: number;
 }
 
-export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
+export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.08 }: AddStockModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -227,10 +228,15 @@ export default function AddStockModal({ onClose, onAdd }: AddStockModalProps) {
                                 ) : (
                                     <div className="flex items-baseline gap-2">
                                         <p className="font-black text-xl text-slate-900">
-                                            {fetchedPrice ? `${fetchedPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : '---'}
+                                            {fetchedPrice ?
+                                                `${(exchangeRate && (!selectedStock?.symbol.includes('.')) ? fetchedPrice / exchangeRate : fetchedPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`
+                                                : '---'}
                                         </p>
                                         <button
-                                            onClick={() => setBuyPrice(fetchedPrice?.toString() || '')}
+                                            onClick={() => {
+                                                const finalPrice = (fetchedPrice && exchangeRate && !selectedStock?.symbol.includes('.')) ? fetchedPrice / exchangeRate : fetchedPrice;
+                                                setBuyPrice(finalPrice?.toFixed(2) || '');
+                                            }}
                                             className="text-[10px] font-bold text-blue-500 uppercase hover:underline"
                                         >
                                             Utiliser comme PRU
