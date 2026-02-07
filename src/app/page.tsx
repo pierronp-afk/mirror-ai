@@ -571,8 +571,7 @@ export default function Dashboard() {
                   aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
                   exchangeRate={eurUsdRate}
                   onRemove={handleRemoveStock}
-                  onUpdateQuantity={updateStockQuantity}
-                  onUpdateAvgPrice={handleUpdateAvgPrice}
+                  onUpdateStock={updateStock}
                   onRefresh={async (symbol) => {
                     try {
                       // 1. Données de marché

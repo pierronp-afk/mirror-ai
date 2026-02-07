@@ -42,8 +42,6 @@ export function usePortfolio() {
 
     const syncStocks = async (newStocks: Stock[]) => {
         if (!user) return;
-        // Optimistic update
-        setStocksState(newStocks);
         try {
             const portfolioRef = doc(db, 'users', user.uid);
             await setDoc(portfolioRef, { stocks: newStocks }, { merge: true });
@@ -51,37 +49,50 @@ export function usePortfolio() {
             const message = err instanceof Error ? err.message : "Erreur lors de la sauvegarde.";
             console.error("Error syncing stocks:", err);
             setError(message);
-            // Revert if needed? Ideally we should fetch from server again or handle error better.
-            // For now, onSnapshot will likely correct it if it fails on server but succeeds locally? 
-            // Actually onSnapshot might trigger with local pending write.
         }
     };
 
     const addStock = async (stock: Stock) => {
-        const existingIdx = stocks.findIndex(s => s.symbol === stock.symbol);
-        let updated;
-        if (existingIdx > -1) {
-            updated = [...stocks];
-            updated[existingIdx] = stock;
-        } else {
-            updated = [...stocks, stock];
-        }
-        await syncStocks(updated);
+        if (!user) return;
+        setStocksState(prev => {
+            const existingIdx = prev.findIndex(s => s.symbol === stock.symbol);
+            let updated;
+            if (existingIdx > -1) {
+                updated = [...prev];
+                updated[existingIdx] = stock;
+            } else {
+                updated = [...prev, stock];
+            }
+            syncStocks(updated);
+            return updated;
+        });
     };
 
     const removeStock = async (symbol: string) => {
-        const updated = stocks.filter(s => s.symbol !== symbol);
-        await syncStocks(updated);
+        if (!user) return;
+        setStocksState(prev => {
+            const updated = prev.filter(s => s.symbol !== symbol);
+            syncStocks(updated);
+            return updated;
+        });
     };
 
     const updateStock = async (symbol: string, shares: number, avgPrice: number, name?: string) => {
-        const updated = stocks.map(s => s.symbol === symbol ? { ...s, shares, avgPrice, name: name || s.name } : s);
-        await syncStocks(updated);
+        if (!user) return;
+        setStocksState(prev => {
+            const updated = prev.map(s => s.symbol === symbol ? { ...s, shares, avgPrice, name: name || s.name } : s);
+            syncStocks(updated);
+            return updated;
+        });
     };
 
     const updateStockQuantity = async (symbol: string, shares: number) => {
-        const updated = stocks.map(s => s.symbol === symbol ? { ...s, shares } : s);
-        await syncStocks(updated);
+        if (!user) return;
+        setStocksState(prev => {
+            const updated = prev.map(s => s.symbol === symbol ? { ...s, shares } : s);
+            syncStocks(updated);
+            return updated;
+        });
     };
 
     return { stocks, loading, error, addStock, removeStock, updateStock, updateStockQuantity, setStocks: syncStocks };

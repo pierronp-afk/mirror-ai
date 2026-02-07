@@ -9,11 +9,10 @@ interface StockCardProps {
     exchangeRate?: number; // EUR/USD rate (e.g. 1.08)
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
-    onUpdateQuantity?: (symbol: string, newQuantity: number) => void;
-    onUpdateAvgPrice?: (symbol: string, newPrice: number) => void; // New prop for updating PRU
+    onUpdateStock?: (symbol: string, shares: number, avgPrice: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.08, onRemove, onRefresh, onUpdateQuantity, onUpdateAvgPrice }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.08, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -128,18 +127,8 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
         const qty = parseFloat(qtyStr);
         const price = parseFloat(priceStr);
 
-        if (!isNaN(qty) && qty > 0 && onUpdateQuantity) {
-            onUpdateQuantity(stock.symbol, qty);
-        }
-
-        // We need a way to update price too. 
-        // Assuming we will add onUpdateAvgPrice to props or use a combined update
-        if (!isNaN(price) && price >= 0 && onUpdateQuantity) {
-            // Temporary hack: onUpdateQuantity might need to change to onUpdateStock(symbol, qty, price)
-            // But for now, we only have onUpdateQuantity in props.
-            // I will implement a local fix in page.tsx to support this or just pass a new prop.
-            // EDIT: I added onUpdateAvgPrice to interface.
-            if (onUpdateAvgPrice) onUpdateAvgPrice(stock.symbol, price);
+        if (!isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0 && onUpdateStock) {
+            onUpdateStock(stock.symbol, qty, price);
         }
 
         setIsEditing(false);
