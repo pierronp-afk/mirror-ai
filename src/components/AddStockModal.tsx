@@ -15,7 +15,7 @@ interface AddStockModalProps {
     exchangeRate?: number;
 }
 
-export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.08 }: AddStockModalProps) {
+export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: AddStockModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);

@@ -20,7 +20,8 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes de cache
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes for stocks
+const FOREX_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for forex
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 let requestCount = 0;
 let windowStart = Date.now();
@@ -49,7 +50,10 @@ function getCachedData(symbol: string): FinnhubQuote | null {
     if (!entry) return null;
 
     const now = Date.now();
-    if (now - entry.timestamp > CACHE_TTL) {
+    const isForex = symbol.startsWith('FX:') || symbol.startsWith('OANDA:');
+    const ttl = isForex ? FOREX_CACHE_TTL : CACHE_TTL;
+
+    if (now - entry.timestamp > ttl) {
         cache.delete(symbol);
         return null;
     }
@@ -65,6 +69,39 @@ function setCachedData(symbol: string, data: FinnhubQuote): void {
 }
 
 // ... imports et cache existants ...
+
+async function getForexRate(symbol: string) {
+    // Only support EUR/USD for now as it's the primary need
+    if (symbol !== 'FX:EURUSD' && symbol !== 'OANDA:EUR_USD' && symbol !== 'EURUSD') {
+        return null;
+    }
+
+    const cacheKey = `forex_${symbol}`;
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < FOREX_CACHE_TTL) {
+        return cached.data;
+    }
+
+    try {
+        const res = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+        if (!res.ok) return null;
+        const data = await res.json();
+
+        if (data && data.rates && data.rates.USD) {
+            const quote = {
+                c: data.rates.USD,
+                d: 0,
+                dp: 0,
+                t: Math.floor(Date.now() / 1000)
+            };
+            cache.set(cacheKey, { data: quote, timestamp: Date.now() });
+            return quote;
+        }
+    } catch (err) {
+        console.error('Forex fetch error:', err);
+    }
+    return null;
+}
 
 async function getCompanyProfile(symbol: string, apiKey: string) {
     // Check cache (profils changent rarement, TTL plus long)
@@ -86,7 +123,8 @@ async function getCompanyProfile(symbol: string, apiKey: string) {
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
-    const symbol = searchParams.get('symbol');
+    const symbolParam = searchParams.get('symbol');
+    const symbol = symbolParam?.trim().toUpperCase();
     const type = searchParams.get('type'); // 'quote' (default) or 'profile'
     const apiKey = process.env.FINNHUB_API_KEY;
 
@@ -99,7 +137,15 @@ export async function GET(req: Request) {
             return NextResponse.json(profile || {});
         }
 
-        // ... logique existante pour 'quote' ...
+        // Special case for Forex (using Frankfurter as more reliable source)
+        if (symbol === 'FX:EURUSD' || symbol === 'OANDA:EUR_USD' || symbol === 'EURUSD') {
+            const forexData = await getForexRate(symbol);
+            if (forexData) {
+                return NextResponse.json(forexData);
+            }
+            // Fallback to existing logic if Frankfurter fails
+        }
+
         // Vérifier le cache d'abord
         const cachedData = getCachedData(symbol);
         if (cachedData) {

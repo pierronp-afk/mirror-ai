@@ -30,9 +30,19 @@ export function useMarketRefresh({ symbols, enabled = true, onRefresh }: UseMark
                 batch = manualSymbols;
             } else {
                 const start = (batchIndexRef.current * BATCH_SIZE) % targetSymbols.length;
-                batch = targetSymbols.slice(start, start + BATCH_SIZE);
-                // If the batch wrapped around, we might need more but let's keep it simple:
-                // If we reach the end, the next call will start from 0 because of the modulo.
+                let potentialBatch = targetSymbols.slice(start, start + BATCH_SIZE);
+
+                // FORCE FX:EURUSD to be in every batch to keep it fresh
+                // But only if it's not already in the batch
+                const forexSymbol = 'FX:EURUSD';
+                if (!potentialBatch.includes(forexSymbol)) {
+                    // Replace one symbol or just add it? 
+                    // Let's just add it, it's safer and only one extra call.
+                    batch = [forexSymbol, ...potentialBatch];
+                } else {
+                    batch = potentialBatch;
+                }
+
                 batchIndexRef.current = (batchIndexRef.current + 1) % Math.ceil(targetSymbols.length / BATCH_SIZE);
             }
 
