@@ -20,6 +20,12 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
     const [editQuantity, setEditQuantity] = useState(stock.shares.toString());
     const [editAvgPrice, setEditAvgPrice] = useState(stock.avgPrice.toString());
 
+    // Update local state when props change (e.g. after a refresh or external update)
+    useEffect(() => {
+        setEditQuantity(stock.shares.toString());
+        setEditAvgPrice(stock.avgPrice.toString());
+    }, [stock.shares, stock.avgPrice]);
+
     // Currency Detection
     const isUS = !stock.symbol.includes('.'); // Simple assumption: no dot (like .PA) means US
     const currencySymbol = isUS ? '$' : '€';

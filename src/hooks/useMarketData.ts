@@ -10,12 +10,19 @@ export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 100
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Créer une clé stable pour les symboles afin d'éviter les re-fetch inutiles si l'array change de référence mais pas de contenu
+    const symbolsKey = symbols.slice().sort().join(',');
+
     useEffect(() => {
         let isMounted = true;
 
         const fetchPrices = async () => {
             // On ne recharge pas si aucun symbole
             if (!symbols.length) return;
+
+            // ... (rest of logic uses closed-over symbols which is fine as content matches key)
+
+            // Note: We use the symbols from the scope. If symbolsKey is same, content is same.
 
             // --- THROTTLING HORAIRE (07:30 - 23:00) ---
             const now = new Date();
@@ -92,7 +99,7 @@ export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 100
             isMounted = false;
             clearInterval(intervalId);
         };
-    }, [symbols, refreshInterval]); // symbols est mémoïsé dans Dashboard
+    }, [symbolsKey, refreshInterval]); // On dépend de la clé stable, pas de la ref du tableau !
 
     return { prices, loading, error };
 }
