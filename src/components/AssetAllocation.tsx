@@ -27,16 +27,33 @@ const SECTOR_RISK: Record<string, number> = {
     'Immobilier': 4,
     'Conso. de base': 3,
     'Utilities': 3,
+    'Chimie & Matériaux': 4,
+    'Industrie': 5,
+    'Finance': 5,
+    'Assurance': 4,
+    'Infrastructure': 4,
     'Autres': 5
 };
 
 const SECTOR_MAPPING: Record<string, string> = {
+    // US Big Tech
     'AAPL': 'Technologie', 'MSFT': 'Technologie', 'NVDA': 'Semi-conducteurs',
     'GOOGL': 'Services Comm.', 'GOOG': 'Services Comm.', 'AMZN': 'Conso. Discrétionnaire',
-    'META': 'Services Comm.', 'TSLA': 'Automobile', 'MC.PA': 'Luxe',
-    'OR.PA': 'Luxe', 'TTE.PA': 'Énergie', 'AIR.PA': 'Aéronautique',
-    'SAN.PA': 'Santé', 'BNP.PA': 'Banque', 'GLE.PA': 'Banque',
-    'ASML': 'Semi-conducteurs', 'SAP': 'Technologie'
+    'META': 'Services Comm.', 'TSLA': 'Automobile', 'NFLX': 'Services Comm.',
+    'AMD': 'Semi-conducteurs', 'INTC': 'Semi-conducteurs', 'CRM': 'Technologie',
+
+    // CAC 40 & Europe
+    'MC.PA': 'Luxe', 'RMS.PA': 'Luxe', 'CDI.PA': 'Luxe', 'KER.PA': 'Luxe',
+    'OR.PA': 'Luxe', 'EL.PA': 'Luxe', 'TTE.PA': 'Énergie', 'AIR.PA': 'Aéronautique',
+    'SAN.PA': 'Santé', 'BNP.PA': 'Banque', 'GLE.PA': 'Banque', 'ACA.PA': 'Banque',
+    'AI.PA': 'Chimie & Matériaux', 'DG.PA': 'Infrastructure', 'SGO.PA': 'Industrie',
+    'SU.PA': 'Technologie', 'DSY.PA': 'Technologie', 'BN.PA': 'Conso. de base',
+    'ML.PA': 'Automobile', 'STLA.PA': 'Automobile', 'STMPA.PA': 'Semi-conducteurs',
+    'ASML': 'Semi-conducteurs', 'SAP': 'Technologie', 'LVMH': 'Luxe',
+
+    // Divers
+    'BRK.B': 'Finance', 'V': 'Finance', 'MA': 'Finance', 'JPM': 'Banque',
+    'UNH': 'Santé', 'PFE': 'Santé', 'LLY': 'Santé', 'XOM': 'Énergie', 'CVX': 'Énergie'
 };
 
 export default function AssetAllocation({ stocks, marketPrices, eurUsdRate }: AssetAllocationProps) {
@@ -45,6 +62,7 @@ export default function AssetAllocation({ stocks, marketPrices, eurUsdRate }: As
         let totalVal = 0;
 
         stocks.forEach(s => {
+            // Priority: Stock object sector > Mapping > "Autres"
             const sector = s.sector || SECTOR_MAPPING[s.symbol.toUpperCase()] || 'Autres';
             const price = marketPrices[s.symbol]?.price || s.avgPrice;
             const isUS = !s.symbol.includes('.');
@@ -100,7 +118,7 @@ export default function AssetAllocation({ stocks, marketPrices, eurUsdRate }: As
     }, [allocationData]);
 
     return (
-        <div className="bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white h-full flex flex-col">
+        <div className="bg-white rounded-[3rem] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-white h-full flex flex-col overflow-hidden">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Allocation Actifs</h3>
@@ -111,19 +129,19 @@ export default function AssetAllocation({ stocks, marketPrices, eurUsdRate }: As
                 </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-center min-h-0">
                 {/* CHART ZONE */}
-                <div className="relative h-[280px] w-full flex items-center justify-center">
+                <div className="relative h-[240px] md:h-[280px] w-full flex items-center justify-center overflow-visible">
                     {stocks.length > 0 ? (
                         <>
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
+                                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                                     <Pie
                                         data={allocationData.data}
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius={75}
-                                        outerRadius={105}
+                                        innerRadius="65%"
+                                        outerRadius="90%"
                                         paddingAngle={6}
                                         dataKey="value"
                                         animationBegin={0}
