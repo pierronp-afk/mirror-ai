@@ -442,10 +442,10 @@ export default function Dashboard() {
           </button>
         </section>
 
-        {/* ANALYTICS SECTION */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ANALYTICS SECTION (Stacked for better UX) */}
+        <section className="flex flex-col gap-10">
           {/* ALLOCATION SECTORIELLE */}
-          <div className="lg:col-span-1">
+          <div className="w-full">
             <AssetAllocation
               stocks={stocks}
               marketPrices={effectiveMarketPrices}
@@ -454,7 +454,9 @@ export default function Dashboard() {
           </div>
 
           {/* GRAPHIQUE DE PILOTAGE */}
-          <PortfolioChart forecast={analysis?.forecast} currentValue={totalValue} />
+          <div className="w-full">
+            <PortfolioChart forecast={analysis?.forecast} currentValue={totalValue} />
+          </div>
         </section>
 
         {/* LISTE ACTIFS */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Stock, AISignal } from '@/types';
-import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw, Edit2, Check, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw, Edit2, Check, X, Sparkles } from 'lucide-react';
 
 interface StockCardProps {
     stock: Stock;
@@ -338,7 +338,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                 <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 rounded-[3rem] p-8 md:p-10 flex flex-col justify-between border-2 border-blue-500 shadow-2xl shadow-blue-500/20 text-white overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
 
-                    <div className="space-y-6">
+                    <div className="space-y-6 flex-1 overflow-y-auto custom-scrollbar pr-1">
                         {/* Header Backend */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -349,90 +349,86 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </div>
                             <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
                                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Live</span>
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Live Engine</span>
                             </div>
                         </div>
 
-                        {/* KPIS DE POSITION */}
-                        <div className="grid grid-cols-1 gap-4">
-                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
-                                <span className="text-xs font-bold text-slate-400">Poids Portefeuille</span>
+                        {/* KPIS DE POSITION (Grid plus dense) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Poids Actuel</span>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-black text-white">{aiSignal?.weight || '---'}%</span>
                                     {aiSignal?.idealWeight && aiSignal.weight && aiSignal.weight > aiSignal.idealWeight && (
-                                        <span className="text-[10px] text-rose-400 flex items-center gap-1 font-bold">
-                                            ⚠️ (idéal: &lt;{aiSignal.idealWeight}%)
-                                        </span>
+                                        <span className="text-rose-400 font-bold">⚠️</span>
                                     )}
                                 </div>
                             </div>
-                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
-                                <span className="text-xs font-bold text-slate-400">Performance Relative</span>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-black ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {isPos ? '+' : ''}{gainPercent.toFixed(1)}%
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 font-bold italic">
-                                        vs secteur {aiSignal?.sectorPerf ? `${aiSignal.sectorPerf > 0 ? '+' : ''}${aiSignal.sectorPerf}%` : '---'}
-                                    </span>
-                                </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Vs Secteur</span>
+                                <span className={`text-sm font-black ${aiSignal?.sectorPerf && aiSignal.sectorPerf > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {aiSignal?.sectorPerf ? `${aiSignal.sectorPerf > 0 ? '+' : ''}${aiSignal.sectorPerf}%` : '---'}
+                                </span>
                             </div>
                         </div>
 
-                        {/* ZONE SIMULATION */}
-                        <div className="relative mt-8 p-6 bg-blue-600/10 rounded-[2.5rem] border border-blue-500/20 overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10">
-                                <TrendingUp size={60} />
-                            </div>
+                        {/* ZONE SIMULATION (Plus compacte et intelligente) */}
+                        <div className="relative p-5 md:p-6 bg-blue-600/5 rounded-[2.5rem] border border-blue-500/20">
+                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Stratégie Mirror AI</p>
 
-                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">🎮 Simulation Stratégique</p>
-
-                            {/* SIGNAL */}
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest ${adviceColor === 'rose' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' :
-                                        adviceColor === 'emerald' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' :
-                                            'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                            {/* SIGNAL & RSI ALIGNÉS */}
+                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                                <div className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest ${adviceColor === 'rose' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                                    adviceColor === 'emerald' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                        'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                     }`}>
                                     Signal: {adviceText}
                                 </div>
                                 {aiSignal?.rsi && (
-                                    <div className="text-[10px] font-bold text-slate-400">
-                                        RSI Technical: <span className={aiSignal.rsi > 70 ? 'text-rose-400' : aiSignal.rsi < 30 ? 'text-emerald-400' : 'text-blue-400'}>{aiSignal.rsi}</span>
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
+                                        <span className="text-[8px] font-bold text-slate-500 uppercase">RSI</span>
+                                        <span className={`text-[10px] font-black ${aiSignal.rsi > 70 ? 'text-rose-400' : aiSignal.rsi < 30 ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                            {aiSignal.rsi}
+                                        </span>
                                     </div>
                                 )}
                             </div>
 
-                            {/* POURQUOI? */}
-                            <div className="space-y-2 mb-6">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Pourquoi ?</p>
-                                <div className="space-y-1">
-                                    {aiSignal?.justification?.split('.').slice(0, 3).map((point, i) => point.trim() && (
-                                        <p key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                                            <span className="text-blue-500 mt-1">•</span> {point}
-                                        </p>
-                                    ))}
-                                </div>
+                            {/* POURQUOI? - Liste plus dense */}
+                            <div className="space-y-2 mb-6 border-l-2 border-blue-500/20 pl-4">
+                                {aiSignal?.justification?.split('.').slice(0, 3).map((point, i) => point.trim() && (
+                                    <p key={i} className="text-xs text-slate-300 leading-tight">
+                                        {point.trim()}
+                                    </p>
+                                ))}
                             </div>
 
-                            {/* SCENARIO SUGGERÉ */}
+                            {/* SCENARIO SUGGERÉ - Mis en avant */}
                             {aiSignal?.scenarioSuggestion && (
-                                <div className="p-4 bg-white/5 rounded-2xl border border-blue-500/20">
-                                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1 italic">💡 Scénario Suggéré</p>
-                                    <p className="text-xs font-bold text-white mb-1">{aiSignal.scenarioSuggestion.action}</p>
-                                    <p className="text-[10px] text-slate-400 leading-tight">{aiSignal.scenarioSuggestion.impact}</p>
+                                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Sparkles size={10} className="text-emerald-400" />
+                                        <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest italic">Arbitrage Suggéré</p>
+                                    </div>
+                                    <p className="text-xs font-bold text-white mb-1 leading-tight">{aiSignal.scenarioSuggestion.action}</p>
+                                    <p className="text-[9px] text-slate-400 leading-tight italic">{aiSignal.scenarioSuggestion.impact}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="pt-8 border-t border-white/10 flex items-center justify-between">
+                    <div className="pt-6 border-t border-white/10 flex items-center justify-between mt-auto">
                         <button
                             onClick={(e) => { e.stopPropagation(); setFlipped(false); }}
-                            className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em] italic bg-blue-500/5 px-6 py-2 rounded-full border border-blue-500/20 hover:bg-blue-500/10 transition-all"
-                        >RETOUR</button>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-500">Perspectives 3M:</span>
-                            <span className="text-[10px] font-black text-emerald-500 uppercase">{aiSignal?.threeMonthOutlook ? 'Optimiste' : 'Neutre'}</span>
+                            className="bg-white/5 hover:bg-white/10 px-5 py-2 rounded-full border border-white/10 transition-all"
+                        >
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Retour</span>
+                        </button>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[8px] font-bold text-slate-500 uppercase">Outlook 3M</span>
+                                <span className="text-[10px] font-black text-emerald-500 uppercase italic">Bullish</span>
+                            </div>
                         </div>
                     </div>
                 </div>
