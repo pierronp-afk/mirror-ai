@@ -10,6 +10,7 @@ import { Stock, AISignal, MarketPrices } from '@/types';
 import AddStockModal from '@/components/AddStockModal';
 import OpportunitiesSection from '@/components/OpportunitiesSection';
 import PortfolioChart from '@/components/PortfolioChart';
+import AssetAllocation from '@/components/AssetAllocation';
 import {
   TrendingUp, TrendingDown, Plus, Trash2, BrainCircuit,
   Sparkles, AlertCircle, CheckCircle2, Activity, Bell, X, Info, FileText, Upload, Clock, Target, Rocket,
@@ -196,30 +197,7 @@ export default function Dashboard() {
   const totalGain = totalValue - totalCost;
   const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-  // Calcul de l'allocation sectorielle (Manuelle pour l'instant)
-  const sectorMapping: Record<string, string> = {
-    'AAPL': 'Technologie', 'MSFT': 'Technologie', 'NVDA': 'Semi-conducteurs',
-    'GOOGL': 'Services Comm.', 'GOOG': 'Services Comm.', 'AMZN': 'Conso. Discrétionnaire',
-    'META': 'Services Comm.', 'TSLA': 'Automobile', 'MC.PA': 'Luxe',
-    'OR.PA': 'Luxe', 'TTE.PA': 'Énergie', 'AIR.PA': 'Aéronautique',
-    'SAN.PA': 'Santé', 'BNP.PA': 'Banque', 'GLE.PA': 'Banque',
-    'ASML': 'Semi-conducteurs', 'SAP': 'Technologie'
-  };
-
-  const allocationData = useMemo(() => {
-    const sectors: Record<string, number> = {};
-    stocks.forEach(s => {
-      const sector = s.sector || sectorMapping[s.symbol.toUpperCase()] || 'Autres';
-      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      const isUS = !s.symbol.includes('.');
-      const priceEur = isUS ? (price / eurUsdRate) : price;
-      const value = s.shares * priceEur;
-      sectors[sector] = (sectors[sector] || 0) + value;
-    });
-    return Object.entries(sectors).map(([name, value]) => ({ name, value }));
-  }, [stocks, effectiveMarketPrices]);
-
-  const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+  // L'allocation sectorielle est maintenant gérée par le composant AssetAllocation
 
   const performanceStats = useMemo(() => {
     if (stocks.length === 0) return null;
@@ -467,49 +445,12 @@ export default function Dashboard() {
         {/* ANALYTICS SECTION */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ALLOCATION SECTORIELLE */}
-          <div className="bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Allocation Actifs</h3>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Par secteur d&apos;activité</p>
-              </div>
-              <PieChartIcon className="text-blue-600" size={24} />
-            </div>
-            <div className="h-[250px] w-full flex items-center justify-center">
-              {allocationData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={allocationData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {allocationData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '1rem' }}
-                      itemStyle={{ fontWeight: '800', fontSize: '12px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-slate-300 font-bold italic">Portefeuille vide</p>
-              )}
-            </div>
-            <div className="mt-6 flex flex-wrap gap-3 justify-center">
-              {allocationData.map((entry, index) => (
-                <div key={index} className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[9px] font-black uppercase text-slate-600">{entry.name}</span>
-                </div>
-              ))}
-            </div>
+          <div className="lg:col-span-1">
+            <AssetAllocation
+              stocks={stocks}
+              marketPrices={effectiveMarketPrices}
+              eurUsdRate={eurUsdRate}
+            />
           </div>
 
           {/* GRAPHIQUE DE PILOTAGE */}
