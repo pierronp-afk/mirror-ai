@@ -87,32 +87,32 @@ export default function PortfolioChart({ forecast, currentValue }: PortfolioChar
     };
 
     return (
-        <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white">
-            <div className="flex justify-between items-center mb-8">
+        <div className="lg:col-span-2 bg-white rounded-[3rem] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-white flex flex-col justify-between">
+            <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">
-                        Pilotage &amp; Prévisions
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 leading-none">
+                        Cockpit prédictif
                     </h3>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">
-                        Projection basée sur l&apos;analyse Mirror AI
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">
+                        Projection à 90 jours (Mirror AI Engine)
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
                     <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-slate-900 rounded-full"></div>
-                        <span className="text-[9px] font-black text-slate-500 uppercase">Réel</span>
+                        <div className="w-2.5 h-2.5 bg-slate-900 rounded-full shadow-sm"></div>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Réel</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-                        <span className="text-[9px] font-black text-blue-600 uppercase">Prévision</span>
+                        <div className="w-2.5 h-2.5 bg-blue-600 rounded-full shadow-sm shadow-blue-500/50"></div>
+                        <span className="text-[9px] font-black text-blue-600 uppercase tracking-tighter">Prévision</span>
                     </div>
                 </div>
             </div>
 
-            <div className="h-[300px] w-full">
+            <div className="h-[250px] w-full">
                 {chartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData}>
+                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                             <defs>
                                 <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#0f172a" stopOpacity={0.1} />
@@ -123,22 +123,22 @@ export default function PortfolioChart({ forecast, currentValue }: PortfolioChar
                                     <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
                             <XAxis
                                 dataKey="date"
-                                tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
+                                tick={{ fontSize: 9, fontWeight: 800, fill: '#94a3b8' }}
                                 tickLine={false}
                                 axisLine={false}
+                                minTickGap={20}
                             />
                             <YAxis
-                                tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
+                                tick={{ fontSize: 9, fontWeight: 800, fill: '#94a3b8' }}
                                 tickLine={false}
                                 axisLine={false}
                                 tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1 }} />
 
-                            {/* Ligne réelle */}
                             <Area
                                 type="monotone"
                                 dataKey="actual"
@@ -147,61 +147,74 @@ export default function PortfolioChart({ forecast, currentValue }: PortfolioChar
                                 fillOpacity={1}
                                 fill="url(#colorActual)"
                                 connectNulls={false}
+                                animationDuration={2000}
                             />
 
-                            {/* Ligne prévision */}
                             <Area
                                 type="monotone"
                                 dataKey="forecast"
                                 stroke="#2563eb"
                                 strokeWidth={3}
-                                strokeDasharray="5 5"
+                                strokeDasharray="8 6"
                                 fillOpacity={1}
                                 fill="url(#colorForecast)"
                                 connectNulls={false}
+                                animationDuration={3000}
                             />
                         </ComposedChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-50 rounded-[2rem]">
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-50 rounded-[2rem] bg-slate-50/30">
                         <BarChart3 size={40} className="mb-2 opacity-50" />
-                        <p className="font-bold italic">Audit requis pour projection</p>
+                        <p className="text-xs font-bold italic tracking-wider">Audit requis pour projection 90j</p>
                     </div>
                 )}
             </div>
 
-            {/* Stats rapides */}
+            {/* Stats détaillées compactes */}
             {forecast && forecast.length > 0 && (
-                <div className="mt-8 grid grid-cols-3 gap-4">
-                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            Valeur Actuelle
-                        </p>
-                        <p className="text-xl font-black text-slate-900">
-                            {currentValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                        </p>
+                <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
+                        <div>
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Actuel</p>
+                            <p className="text-lg font-black text-slate-900">
+                                {currentValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                            </p>
+                        </div>
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                            <TrendingUp size={16} className="text-slate-400" />
+                        </div>
                     </div>
-                    <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">
-                            Prévision 30j
-                        </p>
-                        <p className="text-xl font-black text-blue-600">
-                            {forecast[forecast.length - 1].value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                        </p>
+
+                    <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-center justify-between group hover:border-blue-400 transition-all">
+                        <div>
+                            <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Cible 90j</p>
+                            <p className="text-lg font-black text-blue-600">
+                                {forecast[forecast.length - 1].value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                            </p>
+                        </div>
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform shadow-blue-200/50">
+                            <TrendingUp size={16} className="text-blue-500" />
+                        </div>
                     </div>
-                    <div className={`rounded-2xl p-4 border ${forecast[forecast.length - 1].value >= currentValue
-                        ? 'bg-emerald-50 border-emerald-100'
-                        : 'bg-rose-50 border-rose-100'
+
+                    <div className={`rounded-2xl p-4 border flex items-center justify-between group transition-all ${forecast[forecast.length - 1].value >= currentValue
+                        ? 'bg-emerald-50/50 border-emerald-100 hover:border-emerald-400'
+                        : 'bg-rose-50/50 border-rose-100 hover:border-rose-400'
                         }`}>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                            <TrendingUp size={10} /> Évolution
-                        </p>
-                        <p className={`text-xl font-black ${forecast[forecast.length - 1].value >= currentValue
-                            ? 'text-emerald-600'
-                            : 'text-rose-600'
-                            }`}>
-                            {((forecast[forecast.length - 1].value - currentValue) / currentValue * 100).toFixed(1)}%
-                        </p>
+                        <div>
+                            <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${forecast[forecast.length - 1].value >= currentValue ? 'text-emerald-500' : 'text-rose-500'
+                                }`}>
+                                Performance
+                            </p>
+                            <p className={`text-lg font-black ${forecast[forecast.length - 1].value >= currentValue ? 'text-emerald-600' : 'text-rose-600'
+                                }`}>
+                                {((forecast[forecast.length - 1].value - currentValue) / currentValue * 100).toFixed(1)}%
+                            </p>
+                        </div>
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                            <TrendingUp size={16} className={forecast[forecast.length - 1].value >= currentValue ? 'text-emerald-500' : 'text-rose-500'} />
+                        </div>
                     </div>
                 </div>
             )}

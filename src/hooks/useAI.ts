@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Stock, MarketPrices, AIAnalysis } from '@/types';
-import { buildPortfolioAnalysisPrompt, buildQuestionPrompt, buildStockAnalysisPrompt } from '@/lib/aiConfig';
+import { buildPortfolioAnalysisPrompt, buildQuestionPrompt, buildStockAnalysisPrompt, getFinancialSentiment } from '@/lib/aiConfig';
 
 export function useAI() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -12,17 +12,38 @@ export function useAI() {
     setIsAnalyzing(true);
     setError(null);
 
-    const portfolioContext = stocks.length > 0
-      ? stocks.map(s => {
-        const currentPrice = marketPrices[s.symbol]?.price || s.avgPrice;
-        const gain = ((currentPrice - s.avgPrice) / s.avgPrice) * 100;
-        return `${s.symbol} (${s.name || 'N/A'}): ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${currentPrice}€, ${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%)`;
-      }).join(', ')
-      : "Portefeuille vide.";
-
-    const prompt = buildPortfolioAnalysisPrompt(portfolioContext, tradingDocs.length > 0 ? tradingDocs : undefined);
-
     try {
+      // 1. Enrichissement des données (News & Sentiment)
+      let enrichedContext = "";
+      if (stocks.length > 0) {
+        // Obtenir les news pour les titres majeurs (ex: top 3)
+        const top3Symbols = stocks.slice(0, 3).map(s => s.symbol);
+        const newsPromises = top3Symbols.map(async sym => {
+          try {
+            const res = await fetch(`/api/market-enrich?symbol=${sym}`);
+            const data = await res.json();
+            const headlines = data.headlines?.join(". ") || "";
+            return headlines ? `Headlines for ${sym}: ${headlines}` : "";
+          } catch { return ""; }
+        });
+
+        const allHeadlines = (await Promise.all(newsPromises)).filter(Boolean).join(". ");
+        if (allHeadlines) {
+          const sentiment = await getFinancialSentiment(allHeadlines);
+          enrichedContext = `\nCONTEXTE ACTUALITÉ RÉCENTE (Sentiment: ${sentiment.sentiment}, Score: ${sentiment.score}):\n${sentiment.keyPoints.join(" - ")}\n${allHeadlines}`;
+        }
+      }
+
+      const portfolioContext = stocks.length > 0
+        ? stocks.map(s => {
+          const currentPrice = marketPrices[s.symbol]?.price || s.avgPrice;
+          const gain = ((currentPrice - s.avgPrice) / s.avgPrice) * 100;
+          return `${s.symbol} (${s.name || 'N/A'}): ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${currentPrice}€, ${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%)`;
+        }).join(', ')
+        : "Portefeuille vide.";
+
+      const prompt = buildPortfolioAnalysisPrompt(portfolioContext + enrichedContext, tradingDocs.length > 0 ? tradingDocs : undefined);
+
       const response = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,7 +57,6 @@ export function useAI() {
         return;
       }
 
-      // Extraire le JSON de la réponse
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsedAnalysis = JSON.parse(jsonMatch[0]) as AIAnalysis;
@@ -55,13 +75,25 @@ export function useAI() {
 
   const analyzeStock = async (stock: Stock, marketPrice: number): Promise<any> => {
     try {
+      // Enrichment for single stock
+      let newsContext = "";
+      try {
+        const res = await fetch(`/api/market-enrich?symbol=${stock.symbol}`);
+        const data = await res.json();
+        const headlines = data.headlines?.join(". ") || "";
+        if (headlines) {
+          const sentiment = await getFinancialSentiment(headlines);
+          newsContext = `\nSentiment Récent: ${sentiment.sentiment} (${sentiment.score}). Faits marquants: ${sentiment.keyPoints.join(", ")}`;
+        }
+      } catch (e) { console.error("News enrichment failed", e); }
+
       const prompt = buildStockAnalysisPrompt(
         stock.symbol,
         stock.name || stock.symbol,
         marketPrice,
         stock.shares,
         stock.avgPrice
-      );
+      ) + (newsContext ? `\n\nCONTEXTE ACTU ENRICHI: ${newsContext}` : "");
 
       const response = await fetch('/api/ai', {
         method: 'POST',

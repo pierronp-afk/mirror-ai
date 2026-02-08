@@ -29,6 +29,18 @@ export interface AISignal {
     targetPrice?: number;
     stopLoss?: number;
     threeMonthOutlook?: string; // Perspective détaillée à 3 mois
+
+    // New Advanced Metrics
+    weight?: number; // Poids actuel dans le portefeuille (%)
+    idealWeight?: number; // Poids idéal suggéré par l'IA (%)
+    sectorPerf?: number; // Performance du secteur (%)
+    rsi?: number; // Indicateur RSI (0-100)
+    sentiment?: number; // Sentiment FinBert-style (-1 to 1)
+    scenarioSuggestion?: {
+        action: string;
+        impact: string;
+        details: string;
+    };
 }
 
 export interface Opportunity {
@@ -51,6 +63,11 @@ export interface AIAnalysis {
     opportunities: Opportunity[];
     newsHighlight: string;
     balanceAdvice?: string;
+    scenarios?: {
+        title: string;
+        description: string;
+        action: string;
+    }[];
     forecast?: { date: string; value: number }[];
     lastUpdated?: number;
 }

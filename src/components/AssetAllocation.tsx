@@ -118,125 +118,146 @@ export default function AssetAllocation({ stocks, marketPrices, eurUsdRate }: As
     }, [allocationData]);
 
     return (
-        <div className="bg-white rounded-[3rem] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-white h-full flex flex-col overflow-hidden">
-            <div className="flex justify-between items-center mb-8">
+        <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-xl shadow-slate-200/40 border border-white h-full flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center mb-10">
                 <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Allocation Actifs</h3>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Analyse de diversification & Risque</p>
+                    <h3 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 leading-none">Allocation Actifs</h3>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Analyse de diversification & Risque</p>
                 </div>
-                <div className="bg-blue-50 p-3 rounded-2xl">
-                    <PieChartIcon className="text-blue-600" size={20} />
+                <div className="bg-blue-50 p-4 rounded-2xl shadow-sm">
+                    <PieChartIcon className="text-blue-600" size={24} />
                 </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-center min-h-0">
-                {/* CHART ZONE */}
-                <div className="relative h-[240px] md:h-[280px] w-full flex items-center justify-center overflow-visible">
-                    {stocks.length > 0 ? (
-                        <>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                                    <Pie
-                                        data={allocationData.data}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius="65%"
-                                        outerRadius="90%"
-                                        paddingAngle={6}
-                                        dataKey="value"
-                                        animationBegin={0}
-                                        animationDuration={1500}
-                                    >
-                                        {allocationData.data.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={COLORS[index % COLORS.length]}
-                                                stroke="none"
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip
-                                        contentStyle={{
-                                            borderRadius: '1.5rem',
-                                            border: 'none',
-                                            boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                                            padding: '1rem'
-                                        }}
-                                        itemStyle={{ fontWeight: '800', fontSize: '12px' }}
-                                        formatter={(value: any) => [`${value?.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`, 'Valeur']}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Score</p>
-                                <span className={`text-5xl font-black tracking-tighter ${stats.divScore > 70 ? 'text-emerald-500' : stats.divScore > 40 ? 'text-blue-600' : 'text-rose-500'}`}>
-                                    {stats.divScore}
-                                </span>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Diversification</p>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center gap-3 opacity-20">
-                            <PieChartIcon size={60} />
-                            <p className="font-bold italic">Portefeuille vide</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* INFO ZONE */}
-                <div className="space-y-8">
-                    {/* RISK LEVEL */}
-                    <div className="bg-slate-50 rounded-[2rem] p-6 border border-slate-100 group hover:border-blue-200 transition-colors">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-xl ${stats.riskLevel > 7 ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
-                                    <ShieldAlert size={18} />
+            <div className="flex-1 flex flex-col gap-12 min-h-0">
+                {/* TOP ROW: CHART & RISK (WIDER) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                    {/* CHART ZONE */}
+                    <div className="lg:col-span-5 relative h-[300px] w-full flex items-center justify-center overflow-visible bg-slate-50/50 rounded-[3rem] border border-slate-100/50">
+                        {stocks.length > 0 ? (
+                            <>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                        <Pie
+                                            data={allocationData.data}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius="65%"
+                                            outerRadius="90%"
+                                            paddingAngle={6}
+                                            dataKey="value"
+                                            animationBegin={0}
+                                            animationDuration={1500}
+                                        >
+                                            {allocationData.data.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={COLORS[index % COLORS.length]}
+                                                    stroke="none"
+                                                />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{
+                                                borderRadius: '1.5rem',
+                                                border: 'none',
+                                                boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                                                padding: '1rem'
+                                            }}
+                                            itemStyle={{ fontWeight: '800', fontSize: '12px' }}
+                                            formatter={(value: any) => [`${value?.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`, 'Valeur']}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Score</p>
+                                    <span className={`text-6xl font-black tracking-tighter ${stats.divScore > 70 ? 'text-emerald-500' : stats.divScore > 40 ? 'text-blue-600' : 'text-rose-500'}`}>
+                                        {stats.divScore}
+                                    </span>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Diversification</p>
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Niveau de Risque</p>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center gap-3 opacity-20">
+                                <PieChartIcon size={60} />
+                                <p className="font-bold italic">Portefeuille vide</p>
                             </div>
-                            <span className="text-2xl font-black text-slate-900">{stats.riskLevel}/10</span>
-                        </div>
-                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                            <div
-                                className={`h-full transition-all duration-1000 ${stats.riskLevel > 7 ? 'bg-rose-500' : stats.riskLevel > 4 ? 'bg-blue-600' : 'bg-emerald-500'}`}
-                                style={{ width: `${stats.riskLevel * 10}%` }}
-                            />
-                        </div>
+                        )}
                     </div>
 
-                    {/* RECOMMENDATIONS */}
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                            Recommandations de Pilotage
-                        </p>
-                        <div className="space-y-3">
-                            {stats.recommendations.map((rec, i) => (
-                                <div key={i} className={`flex gap-3 p-4 rounded-2xl border ${rec.includes('Réduisez') || rec.includes('Concentration') ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                                    <div className="mt-0.5">
-                                        {rec.includes('Réduisez') || rec.includes('Concentration') ?
-                                            <AlertTriangle size={14} className="text-amber-600" /> :
-                                            <CheckCircle2 size={14} className="text-emerald-600" />
-                                        }
+                    {/* RISK ZONE (WIDER) */}
+                    <div className="lg:col-span-7 space-y-8">
+                        <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-10 shadow-2xl shadow-slate-900/20 border-b-4 border-blue-600 group transition-all">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-4 rounded-2xl ${stats.riskLevel > 7 ? 'bg-rose-500/10 text-rose-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                                        <ShieldAlert size={28} />
                                     </div>
-                                    <p className={`text-xs font-bold leading-relaxed ${rec.includes('Réduisez') || rec.includes('Concentration') ? 'text-amber-900' : 'text-emerald-900'}`}>
-                                        {rec}
-                                    </p>
+                                    <div>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 italic">Niveau de Risque Global</p>
+                                        <h4 className="text-white text-sm font-bold mt-1">Évaluation pondérée du capital</h4>
+                                    </div>
                                 </div>
-                            ))}
+                                <div className="text-right">
+                                    <span className="text-5xl font-black text-white tracking-tighter">{stats.riskLevel}</span>
+                                    <span className="text-slate-500 text-xl font-bold">/10</span>
+                                </div>
+                            </div>
+                            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-0.5">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_-3px] ${stats.riskLevel > 7 ? 'bg-rose-500 shadow-rose-500/50' :
+                                            stats.riskLevel > 4 ? 'bg-blue-500 shadow-blue-500/50' :
+                                                'bg-emerald-500 shadow-emerald-500/50'
+                                        }`}
+                                    style={{ width: `${stats.riskLevel * 10}%` }}
+                                />
+                            </div>
+                            <div className="mt-4 flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                <span>Prudent</span>
+                                <span>Équilibré</span>
+                                <span>Spéculatif</span>
+                            </div>
+                        </div>
+
+                        {/* RECOMMENDATIONS - GRID STYLE */}
+                        <div className="space-y-4">
+                            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 italic">
+                                Pilotage Stratégique
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {stats.recommendations.map((rec, i) => (
+                                    <div key={i} className={`flex gap-4 p-5 rounded-[2rem] border transition-all hover:scale-[1.02] ${rec.includes('Réduisez') || rec.includes('Concentration')
+                                            ? 'bg-amber-50/50 border-amber-100 hover:bg-amber-50'
+                                            : 'bg-emerald-50/50 border-emerald-100 hover:bg-emerald-50'
+                                        }`}>
+                                        <div className="mt-0.5">
+                                            {rec.includes('Réduisez') || rec.includes('Concentration') ?
+                                                <div className="p-2 bg-amber-100 text-amber-600 rounded-xl"><AlertTriangle size={16} /></div> :
+                                                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle2 size={16} /></div>
+                                            }
+                                        </div>
+                                        <p className={`text-xs font-bold leading-relaxed ${rec.includes('Réduisez') || rec.includes('Concentration') ? 'text-amber-900' : 'text-emerald-900'}`}>
+                                            {rec}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* SECTOR LEGEND */}
-            <div className="mt-10 flex flex-wrap gap-3 justify-center">
-                {allocationData.data.map((entry, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 hover:scale-105 transition-transform cursor-default">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="text-[10px] font-black uppercase text-slate-700">{entry.name}</span>
-                        <span className="text-[10px] font-bold text-slate-400 ml-1">{entry.percent.toFixed(1)}%</span>
-                    </div>
-                ))}
+                {/* BOTTOM ROW: SECTOR LEGEND (More premium) */}
+                <div className="flex flex-wrap gap-4 justify-start">
+                    {allocationData.data.map((entry, index) => (
+                        <div key={index} className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-100 hover:border-blue-200 hover:shadow-lg hover:shadow-slate-100 transition-all cursor-default group">
+                            <div className="w-3 h-3 rounded-full shadow-sm group-hover:scale-125 transition-transform" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase text-slate-800 leading-none">{entry.name}</span>
+                                <span className="text-[9px] font-bold text-slate-400 mt-1">{entry.percent.toFixed(1)}% du capital</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
