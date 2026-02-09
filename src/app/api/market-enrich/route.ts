@@ -10,7 +10,8 @@ export async function GET(req: Request) {
     }
 
     if (!rapidApiKey) {
-        return NextResponse.json({ error: "RAPIDAPI_KEY is missing" }, { status: 500 });
+        console.warn("⚠️ RAPIDAPI_KEY is missing. Market enrichment disabled.");
+        return NextResponse.json({ error: "RAPIDAPI_KEY manquante", headlines: [] }, { status: 200 });
     }
 
     try {
@@ -45,7 +46,11 @@ export async function GET(req: Request) {
         });
 
     } catch (error: any) {
-        console.error("Error in market-enrich API:", error);
-        return NextResponse.json({ error: "Failed to fetch enrichment data", message: error.message }, { status: 500 });
+        console.error("Error in market-enrich API:", error.message);
+        return NextResponse.json({
+            error: "Failed to fetch enrichment data",
+            message: error.message,
+            headlines: [] // Fallback vide pour ne pas crasher le frontend
+        }, { status: 200 });
     }
 }

@@ -121,6 +121,31 @@ async function getCompanyProfile(symbol: string, apiKey: string) {
     return data;
 }
 
+async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
+    try {
+        console.log(`🔍 Tentative de fallback Yahoo pour ${symbol}...`);
+        // Using Yahoo Finance public chart API as a fallback for quotes
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`);
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        const meta = data?.chart?.result?.[0]?.meta;
+
+        if (meta && meta.regularMarketPrice) {
+            return {
+                c: meta.regularMarketPrice,
+                d: meta.regularMarketPrice - meta.chartPreviousClose,
+                dp: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100,
+                pc: meta.chartPreviousClose,
+                t: Math.floor(Date.now() / 1000)
+            };
+        }
+    } catch (err) {
+        console.error(`❌ Yahoo fallback failed for ${symbol}:`, err);
+    }
+    return null;
+}
+
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const symbolParam = searchParams.get('symbol');
@@ -175,11 +200,20 @@ export async function GET(req: Request) {
 
         const data = await response.json() as any;
 
-        if (data.c) {
+        if (data.c && data.c > 0) {
             setCachedData(symbol, data);
             return NextResponse.json(data);
         } else {
-            console.warn(`⚠️ Pas de prix (c=0) retourné par Finnhub pour ${symbol}. Symbole peut-être invalide ou non supporté.`);
+            console.warn(`⚠️ Pas de prix (c=0) retourné par Finnhub pour ${symbol}. Tentative de fallback Yahoo...`);
+
+            // Fallback Yahoo
+            const yahooData = await getYahooFallback(symbol);
+            if (yahooData) {
+                console.log(`✅ Succès fallback Yahoo pour ${symbol}: ${yahooData.c}`);
+                setCachedData(symbol, yahooData);
+                return NextResponse.json(yahooData);
+            }
+
             return NextResponse.json({ ...data, warning: "Symbole non supporté ou données manquantes" });
         }
 
