@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Stock, MarketPrices, AIAnalysis } from '@/types';
-import { buildPortfolioAnalysisPrompt, buildQuestionPrompt, buildStockAnalysisPrompt, getFinancialSentiment } from '@/lib/aiConfig';
+import { buildGlobalPortfolioPrompt, buildIndividualStockPrompt, buildQuestionPrompt, getFinancialSentiment } from '@/lib/aiConfig';
 
 export function useAI() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -13,40 +13,9 @@ export function useAI() {
     setError(null);
 
     try {
-      // 1. Enrichissement des données (News & Sentiment)
-      let enrichedContext = "";
-      if (stocks.length > 0) {
-        // Obtenir les news pour les titres majeurs (passé de 3 à 5 pour une meilleure couverture)
-        const topSymbols = stocks.slice(0, 5).map(s => s.symbol);
-        const newsPromises = topSymbols.map(async sym => {
-          try {
-            const res = await fetch(`/api/market-enrich?symbol=${sym}`);
-            const data = await res.json();
-            const headlines = data.headlines?.join(". ") || "";
-            return headlines ? `Headlines for ${sym}: ${headlines}` : "";
-          } catch { return ""; }
-        });
-
-        const allHeadlines = (await Promise.all(newsPromises)).filter(Boolean).join(". ");
-        if (allHeadlines) {
-          const sentiment = await getFinancialSentiment(allHeadlines);
-          enrichedContext = `\nCONTEXTE ACTUALITÉ RÉCENTE (Sentiment: ${sentiment.sentiment}, Score: ${sentiment.score}):\n${sentiment.keyPoints.join(" - ")}\n${allHeadlines}`;
-        }
-      }
-
-      const portfolioContext = stocks.length > 0
-        ? stocks.map(s => {
-          const mPrice = marketPrices[s.symbol]?.price;
-          const hasPrice = mPrice && mPrice > 0;
-          const currentPrice = hasPrice ? mPrice : s.avgPrice;
-          const gain = hasPrice ? (((currentPrice - s.avgPrice) / s.avgPrice) * 100) : 0;
-          const priceLabel = hasPrice ? `${currentPrice}€` : "PRIX NON DISPONIBLE (utiliser avgPrice comme proxy)";
-
-          return `${s.symbol} (${s.name || 'N/A'}): ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${priceLabel}, Gain: ${hasPrice ? (gain >= 0 ? '+' : '') + gain.toFixed(2) + '%' : 'N/A'})`;
-        }).join(', ')
-        : "Portefeuille vide.";
-
-      const prompt = buildPortfolioAnalysisPrompt(portfolioContext + enrichedContext, tradingDocs.length > 0 ? tradingDocs : undefined);
+      // Analyse GLOBALE (Macro)
+      const portfolioSummary = stocks.map(s => `${s.symbol} (${s.shares} titres)`).join(", ") || "Vide";
+      const prompt = buildGlobalPortfolioPrompt(portfolioSummary, tradingDocs.length > 0 ? tradingDocs : undefined);
 
       const response = await fetch('/api/ai', {
         method: 'POST',
@@ -55,23 +24,20 @@ export function useAI() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || data.error || "L'IA est momentanément indisponible.");
-        return;
-      }
+      if (!response.ok) throw new Error(data.message || "Erreur IA");
 
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsedAnalysis = JSON.parse(jsonMatch[0]) as AIAnalysis;
-        parsedAnalysis.lastUpdated = Date.now();
-        setAnalysis(parsedAnalysis);
-      } else {
-        setError("L'IA n'a pas renvoyé le format attendu.");
+        const globalData = JSON.parse(jsonMatch[0]);
+        setAnalysis(prev => ({
+          ...globalData,
+          signals: prev?.signals || [], // On garde les signaux individuels déjà chargés
+          lastUpdated: Date.now()
+        }));
       }
-    } catch (err: unknown) {
-      console.error("Erreur hook useAI:", err);
-      setError("Erreur de connexion avec le serveur.");
+    } catch (err: any) {
+      console.error("Erreur global analysis:", err);
+      setError("Impossible de générer l'analyse globale.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -87,17 +53,18 @@ export function useAI() {
         const headlines = data.headlines?.join(". ") || "";
         if (headlines) {
           const sentiment = await getFinancialSentiment(headlines);
-          newsContext = `\nSentiment Récent: ${sentiment.sentiment} (${sentiment.score}). Faits marquants: ${sentiment.keyPoints.join(", ")}`;
+          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 300)}`;
         }
       } catch (e) { console.error("News enrichment failed", e); }
 
-      const prompt = buildStockAnalysisPrompt(
+      const prompt = buildIndividualStockPrompt(
         stock.symbol,
         stock.name || stock.symbol,
         marketPrice,
         stock.shares,
-        stock.avgPrice
-      ) + (newsContext ? `\n\nCONTEXTE ACTU ENRICHI: ${newsContext}` : "");
+        stock.avgPrice,
+        newsContext
+      );
 
       const response = await fetch('/api/ai', {
         method: 'POST',
@@ -111,37 +78,32 @@ export function useAI() {
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const newSignal = JSON.parse(jsonMatch[0]);
+        // Normalisation for UI compatibility (rec vs advice)
+        if (newSignal.rec && !newSignal.advice) newSignal.advice = newSignal.rec;
 
-        // Mettre à jour l'état local
         setAnalysis(prev => {
-          if (!prev) {
-            // Initialiser un état d'analyse minimal si inexistant
-            return {
-              health: "Analyse individuelle",
-              healthDesc: `Analyse flash de ${stock.symbol} effectuée.`,
-              prediction: newSignal.advice,
-              predictionDesc: newSignal.reason,
-              signals: [newSignal],
-              opportunities: [],
-              newsHighlight: "",
-              balanceAdvice: "",
-              forecast: [],
-              lastUpdated: Date.now()
-            };
-          }
-          const exists = prev.signals.find(s => s.symbol === stock.symbol);
-          let newSignals;
-          if (exists) {
-            newSignals = prev.signals.map(s => s.symbol === stock.symbol ? newSignal : s);
-          } else {
-            newSignals = [...prev.signals, newSignal];
-          }
-          return { ...prev, signals: newSignals, lastUpdated: Date.now() };
-        });
+          const currentSignals = prev?.signals || [];
+          const index = currentSignals.findIndex(s => s.symbol === stock.symbol);
+          const newSignals = [...currentSignals];
+          if (index >= 0) newSignals[index] = newSignal;
+          else newSignals.push(newSignal);
 
+          return {
+            ...prev,
+            health: prev?.health || "Analyse en cours",
+            healthDesc: prev?.healthDesc || "Mise à jour des signaux...",
+            prediction: prev?.prediction || "---",
+            predictionDesc: prev?.predictionDesc || "",
+            opportunities: prev?.opportunities || [],
+            scenarios: prev?.scenarios || [],
+            balanceAdvice: prev?.balanceAdvice || "",
+            forecast: prev?.forecast || [],
+            signals: newSignals,
+            lastUpdated: Date.now()
+          } as AIAnalysis;
+        });
         return newSignal;
       }
-      return null;
     } catch (err) {
       console.error("Erreur analyzeStock:", err);
       return null;

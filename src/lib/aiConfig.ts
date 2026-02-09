@@ -88,8 +88,11 @@ STYLE:
 /**
  * Génère un prompt enrichi pour l'analyse de portefeuille
  */
-export function buildPortfolioAnalysisPrompt(
-    portfolioContext: string,
+/**
+ * Génère un prompt pour la santé GLOBALE du portefeuille (Macro)
+ */
+export function buildGlobalPortfolioPrompt(
+    portfolioSummary: string,
     tradingDocs?: string[]
 ): string {
     let prompt = `${SYSTEM_PROMPT}\n\n`;
@@ -98,71 +101,25 @@ export function buildPortfolioAnalysisPrompt(
         prompt += `DOCUMENTS DE RÉFÉRENCE TRADING:\n${tradingDocs.join('\n\n')}\n\n`;
     }
 
-    prompt += `MISSION : Audit institutionnel du portefeuille : ${portfolioContext}.
+    prompt += `MISSION : Analyse de la santé macro et de la stratégie globale du portefeuille : ${portfolioSummary}.
+    
+    INSTRUCTIONS :
+    - Évalue la santé globale (health) avec un terme financier.
+    - Donne une prédiction de tendance à 3 mois (XX%).
+    - Propose des scénarios d'arbitrage macro (vendre un secteur pour un autre).
+    - Donne un conseil d'équilibre général (balanceAdvice).
 
-INSTRUCTIONS DÉTAILLÉES :
-1. ANALYSE PORTEFEUILLE (Signals) :
-   - Tu DOIS impérativement fournir une analyse pour CHAQUE titre listé dans le contexte. Le tableau 'signals' doit avoir la même longueur que la liste des titres fournis.
-   - Même si aucune action n'est requise, fournis un signal avec l'avis "Conserver". Aucun titre ne doit être oublié.
-   - Pour CHAQUE titre, fournis des recommandations CHIFFRÉES précises.
-   - Inclure des métriques de simulation : RSI estimé, Sentiment (FinBert-style -1 à 1), Poids actuel vs Poids idéal.
-   - Fournir un "Scenario Suggéré" clair : ex: "Vendre 33% de la ligne pour ramener le poids à 10%".
-   - Comparer la performance du titre à celle de son secteur.
-
-2. SCÉNARIOS CONSEILLÉS (scenarios) :
-   - Propose des arbitrages concrets : "Vendre [Titre A] à [X%] pour acheter [Titre B] à [Y%]" afin d'équilibrer les secteurs ou augmenter la performance.
-
-3. OPPORTUNITÉS :
-   - Propose STRICTEMENT 3 types d'opportunités avec potentiel > 10% (LONG, SHORT, FUSIL).
-
-4. FORECAST :
-   - Courbe prévisionnelle sur 90 jours (3 mois).
-
-RÉPONSE STRICTE JSON :
-{
-  "health": "TERME_FINANCIER",
-  "healthDesc": "Synthèse technique OBJECTIVE",
-  "prediction": "+XX% ou -XX%",
-  "predictionDesc": "Détails macro RÉALISTES",
-  "signals": [
+    RÉPONSE STRICTE JSON :
     {
-      "symbol": "TICKER",
-      "name": "Nom",
-      "reason": "Argument court et factuel",
-      "justification": "Contexte de marché et analyse fondamentale détaillée",
-      "threeMonthOutlook": "Perspective détaillée à 3 mois",
-      "rec": "CONSEIL CLAIR",
-      "urgency": "HAUTE/MODÉRÉE/FAIBLE",
-      "color": "rose/emerald/blue",
-      "advice": "Vendre/Alléger/Conserver/Renforcer/Acheter",
-      "percentRecommendation": 15,
-      "targetPrice": 0,
-      "stopLoss": 0,
-      "weight": 0, // % actuel
-      "idealWeight": 0, // % idéal
-      "sectorPerf": 0, // % perf secteur
-      "rsi": 0, // 0-100
-      "sentiment": 0.0, // -1 à 1
-      "scenarioSuggestion": {
-        "action": "Vendre 33% de la position",
-        "impact": "Réduction du poids de 15% à 10%",
-        "details": "Prise de profits cohérente avec surpondération"
-      }
-    }
-  ],
-  "opportunities": [...],
-  "scenarios": [
-    {
-      "title": "Arbitrage Stratégique",
-      "description": "Vendre 20% de AAPL pour renforcer SAN.PA",
-      "action": "Rééquilibrage Secteur"
-    }
-  ],
-  "newsHighlight": "Titre actu pertinent",
-  "balanceAdvice": "Conseil global d'équilibre",
-  "forecast": [{"date": "ISO", "value": 0}],
-  "lastUpdated": ${Date.now()}
-}`;
+      "health": "TERME",
+      "healthDesc": "Synthèse technique",
+      "prediction": "+XX%",
+      "predictionDesc": "Contexte macro",
+      "opportunities": [{"title": "Texte", "description": "Texte", "type": "LONG/SHORT/FUSIL"}],
+      "scenarios": [{"title": "Texte", "description": "Texte", "action": "Texte"}],
+      "balanceAdvice": "Texte global",
+      "forecast": [{"date": "ISO", "value": 0}]
+    }`;
 
     return prompt;
 }
@@ -175,67 +132,65 @@ export function buildQuestionPrompt(
     portfolioContext?: string
 ): string {
     let prompt = `${SYSTEM_PROMPT}\n\n`;
-
-    prompt += `QUESTION UTILISATEUR : ${question}\n\n`;
+    prompt += `QUESTION UTILISATEUR: ${question}\n\n`;
 
     if (portfolioContext) {
-        prompt += `CONTEXTE PORTEFEUILLE : ${portfolioContext}\n\n`;
+        prompt += `CONTEXTE PORTEFEUILLE: ${portfolioContext}\n\n`;
     }
 
-    prompt += `INSTRUCTIONS :
-- Réponds de manière technique et sérieuse
-- Si la question porte sur des opportunités, propose 2-3 titres concrets avec justification
-- Sois OBJECTIF, même si la réponse n'est pas ce que l'utilisateur veut entendre
-- Si tu proposes des titres, fournis le format JSON suivant pour chacun:
-  {"symbol": "TICKER", "name": "Nom", "reason": "Justification factuelle", "targetPrice": 0}`;
+    prompt += `INSTRUCTIONS:
+    - Réponds de manière technique et sérieuse.
+    - Si la question porte sur des opportunités, propose 2-3 titres concrets avec justification.
+    - Sois OBJECTIF.
+    - Si tu proposes des titres, fournis le format JSON suivant pour chacun:
+    { "symbol": "TICKER", "name": "Nom", "reason": "Justification factuelle", "targetPrice": 0 }`;
 
     return prompt;
 }
 
 /**
- * Génère un prompt pour l'analyse d'une seule action
+ * Génère un prompt pour l'analyse d'un SEUL titre (Micro)
  */
-export function buildStockAnalysisPrompt(
-    stockSymbol: string,
-    stockName: string,
+export function buildIndividualStockPrompt(
+    symbol: string,
+    name: string,
     price: number,
     shares: number,
-    avgPrice: number
+    avgPrice: number,
+    news?: string
 ): string {
     return `${SYSTEM_PROMPT}
 
-MISSION : Analyse flash détaillée de l'action ${stockName} (${stockSymbol}).
-Données: ${shares} titres détenus à ${avgPrice}€ (Prix actuel: ${price}€).
+    MISSION : Analyse FLASH du titre ${name} (${symbol}).
+    Données: ${shares} titres @ ${avgPrice}€ (Prix actuel: ${price > 0 ? price + '€' : 'Non disponible'}).
+    ${news ? `ACTUALITÉ PRÉCISE : ${news}` : ''}
 
-INSTRUCTIONS :
-- Fournis une recommandation CHIFFRÉE précise.
-- Inclure RSI estimé, Sentiment et Poids idéal.
-- Proposer un scénario suggéré.
+    INSTRUCTIONS :
+    - Sois précis sur la recommandation (Acheter/Vendre/Alléger/Conserver/Renforcer).
+    - Donne des prix cibles (targetPrice) et stop loss explicites.
+    - Analyse le RSI et le Sentiment (score -1 à 1).
+    - Donne un poid idéal suggéré (idealWeight) entre 0 et 20%.
 
-RÉPONSE STRICTE JSON :
-{
-  "symbol": "${stockSymbol}",
-  "name": "${stockName}",
-  "reason": "Argument clé",
-  "justification": "Analyse détaillée",
-  "threeMonthOutlook": "Scénario à 3 mois",
-  "rec": "CONSEIL COURT",
-  "urgency": "HAUTE/MODÉRÉE/FAIBLE",
-  "color": "rose/emerald/blue",
-  "advice": "Vendre/Alléger/Conserver/Renforcer",
-  "percentRecommendation": 0,
-  "targetPrice": 0,
-  "stopLoss": 0,
-  "rsi": 0,
-  "sentiment": 0,
-  "idealWeight": 10,
-  "sectorPerf": 0,
-  "scenarioSuggestion": {
-    "action": "TEXTE",
-    "impact": "TEXTE",
-    "details": "TEXTE"
-  }
-}`;
+    RÉPONSE STRICTE JSON :
+    {
+      "symbol": "${symbol}",
+      "name": "${name}",
+      "rec": "CONSEIL COURT",
+      "advice": "Action",
+      "justification": "Texte détaillé",
+      "threeMonthOutlook": "Texte",
+      "urgency": "HAUTE/MODEREE/FAIBLE",
+      "color": "rose/emerald/blue",
+      "targetPrice": 0,
+      "stopLoss": 0,
+      "rsi": 0,
+      "sentiment": 0,
+      "idealWeight": 0,
+      "scenarioSuggestion": {
+        "action": "Action précise",
+        "impact": "Impact attendu"
+      }
+    }`;
 }
 
 /**
@@ -244,24 +199,24 @@ RÉPONSE STRICTE JSON :
 export const FINBERT_PROMPT = `Tu es un classifieur de sentiment financier haute précision.
 Analyse les titres de presse ou les données de marché fournis et classe le sentiment global.
 
-RÈGLES :
+    RÈGLES :
 - BULLISH : Sentiment positif, croissance attendue, bonnes nouvelles fondamentales.
 - BEARISH : Sentiment négatif, risque élevé, mauvaises nouvelles ou faiblesse technique.
 - NEUTRAL : Pas de direction claire ou informations contradictoires.
 
-RÉPONSE STRICTE JSON :
+RÉPONSE STRICTE JSON:
 {
-  "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "score": number, // De -1.0 (très bearish) à 1.0 (très bullish)
-  "keyPoints": string[] // 3 points max
-}`;
+    "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
+        "score": number, // De -1.0 (très bearish) à 1.0 (très bullish)
+            "keyPoints": string[] // 3 points max
+} `;
 
 /**
  * Fonction pour obtenir le sentiment financier (émulation FinBert via Gemini)
  */
 export async function getFinancialSentiment(context: string): Promise<{ sentiment: string, score: number, keyPoints: string[] }> {
     const aiConfig = getAIConfig();
-    const prompt = `${FINBERT_PROMPT}\n\nCONTEXTE À ANALYSER :\n${context}`;
+    const prompt = `${FINBERT_PROMPT} \n\nCONTEXTE À ANALYSER: \n${context} `;
 
     try {
         const response = await fetch('/api/ai', {

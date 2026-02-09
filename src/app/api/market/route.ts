@@ -121,6 +121,37 @@ async function getCompanyProfile(symbol: string, apiKey: string) {
     return data;
 }
 
+async function getStooqFallback(symbol: string): Promise<FinnhubQuote | null> {
+    try {
+        console.log(`🔍 Tentative de fallback Stooq pour ${symbol}...`);
+        let stooqSymbol = symbol;
+        if (symbol.endsWith('.PA')) stooqSymbol = symbol.replace('.PA', '.FR');
+
+        const res = await fetch(`https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`);
+        if (!res.ok) return null;
+
+        const text = await res.text();
+        const lines = text.split('\n');
+        if (lines.length < 2) return null;
+
+        const data = lines[1].split(',');
+        const close = parseFloat(data[6]);
+
+        if (!isNaN(close) && close > 0) {
+            return {
+                c: close,
+                d: close - parseFloat(data[3] || "0"),
+                dp: 0,
+                pc: parseFloat(data[3] || "0"),
+                t: Math.floor(Date.now() / 1000)
+            };
+        }
+    } catch (err) {
+        console.error(`❌ Erreur fallback Stooq pour ${symbol}:`, err);
+    }
+    return null;
+}
+
 async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
     try {
         console.log(`🔍 Tentative de fallback Yahoo pour ${symbol}...`);
@@ -226,6 +257,14 @@ export async function GET(req: Request) {
                 console.log(`✅ Succès fallback Yahoo pour ${symbol}: ${yahooData.c}`);
                 setCachedData(symbol, yahooData);
                 return NextResponse.json(yahooData);
+            }
+
+            // Fallback Stooq
+            const stooqData = await getStooqFallback(symbol);
+            if (stooqData) {
+                console.log(`✅ Succès fallback Stooq pour ${symbol}: ${stooqData.c}`);
+                setCachedData(symbol, stooqData);
+                return NextResponse.json(stooqData);
             }
 
             return NextResponse.json({ ...data, warning: "Symbole non supporté ou données manquantes" });
