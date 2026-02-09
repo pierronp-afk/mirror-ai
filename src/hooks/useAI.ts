@@ -22,8 +22,8 @@ export function useAI() {
           try {
             const res = await fetch(`/api/market-enrich?symbol=${sym}`);
             const data = await res.json();
-            // On limite à 2 titres par ligne pour garder un équilibre entre précision et taille du prompt
-            return data.headlines?.length ? `[${sym}] ${data.headlines.slice(0, 2).join(". ")}` : "";
+            // On limite à un titre par ligne pour ne pas saturer le prompt si le portefeuille est gros
+            return data.headlines?.length ? `[${sym}] ${data.headlines[0]}` : "";
           } catch { return ""; }
         });
         const allHeadlines = (await Promise.all(newsPromises)).filter(Boolean).join("\n");
@@ -115,11 +115,6 @@ export function useAI() {
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const newSignal = JSON.parse(jsonMatch[0]);
-        // Note: data.cached indique si la réponse vient du cache serveur
-        if (data.cached) {
-          console.log(`ℹ️ [Cache] Analyse récupérée pour ${stock.symbol}`);
-        }
-
         // Normalisation for UI compatibility (rec vs advice)
         if (newSignal.rec && !newSignal.advice) newSignal.advice = newSignal.rec;
 
@@ -146,12 +141,8 @@ export function useAI() {
         });
         return newSignal;
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Erreur analyzeStock:", err);
-      // On propage l'erreur avec un message explicite si c'est un quota
-      if (err.message?.includes('quota') || err.message?.includes('429')) {
-        throw new Error("Limite de quota atteinte. Veuillez réessayer plus tard ou attendre le rafraîchissement.");
-      }
       return null;
     }
   };
