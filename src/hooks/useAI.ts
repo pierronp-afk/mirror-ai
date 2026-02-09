@@ -22,8 +22,8 @@ export function useAI() {
           try {
             const res = await fetch(`/api/market-enrich?symbol=${sym}`);
             const data = await res.json();
-            // On limite à un titre par ligne pour ne pas saturer le prompt si le portefeuille est gros
-            return data.headlines?.length ? `[${sym}] ${data.headlines[0]}` : "";
+            // On limite à 2 titres par ligne pour garder un équilibre entre précision et taille du prompt
+            return data.headlines?.length ? `[${sym}] ${data.headlines.slice(0, 2).join(". ")}` : "";
           } catch { return ""; }
         });
         const allHeadlines = (await Promise.all(newsPromises)).filter(Boolean).join("\n");
@@ -81,7 +81,8 @@ export function useAI() {
         const headlines = data.headlines?.join(". ") || "";
         if (headlines) {
           const sentiment = await getFinancialSentiment(headlines);
-          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 300)}`;
+          // On augmente le contexte news à 1000 caractères pour plus de profondeur
+          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 1000)}`;
         }
       } catch (e) { console.error("News enrichment failed", e); }
 
