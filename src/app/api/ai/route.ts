@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getAIConfig, AI_PROVIDERS } from '@/lib/aiConfig';
+import { getAIConfig, AI_PROVIDERS, GEMINI_FALLBACK_MODELS } from '@/lib/aiConfig';
+import { aiCache } from '@/lib/cache';
 
 /**
  * Route API pour interroger l'IA.
@@ -23,9 +24,6 @@ export async function POST(req: Request) {
     }, { status: 500 });
   }
 
-  // Debug sécurisé
-  console.log(`📡 Appel API IA (Provider: ${aiConfig.provider}) avec la clé se terminant par : ...${aiConfig.apiKey.slice(-4)}`);
-
   try {
     const { prompt } = await req.json();
 
@@ -33,24 +31,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le prompt est requis" }, { status: 400 });
     }
 
+    // 1. Vérification du cache (TTL 2h demandé par l'utilisateur)
+    const cachedResponse = aiCache.get<string>(prompt);
+    if (cachedResponse) {
+      console.log("♻️ Réponse récupérée depuis le cache.");
+      return NextResponse.json({ analysis: cachedResponse, cached: true });
+    }
+
+    // Debug sécurisé
+    console.log(`📡 Appel API IA (Provider: ${aiConfig.provider}) avec la clé se terminant par : ...${aiConfig.apiKey.slice(-4)}`);
+
     /**
-     * Fonction d'appel avec gestion des réessais (Exponential Backoff)
-     * Délais : 1s, 2s, 4s, 8s, 16s
+     * Fonction d'appel avec gestion des réessais et rotation de modèles
      */
-    const callAIWithRetry = async (retries = 3, delay = 1000): Promise<string> => {
+    const callAIWithRotation = async (
+      modelIndex = 0,
+      retriesPerModel = 2,
+      delay = 1000
+    ): Promise<string> => {
       let response: Response;
       let payload: any;
 
+      const currentModel = aiConfig.provider === AI_PROVIDERS.GEMINI
+        ? (GEMINI_FALLBACK_MODELS[modelIndex] || aiConfig.model)
+        : aiConfig.model;
+
       // Configuration selon le provider
       if (aiConfig.provider === AI_PROVIDERS.GEMINI) {
-        const url = `${aiConfig.endpoint}/gemini-flash-latest:generateContent?key=${aiConfig.apiKey}`;
+        const url = `${aiConfig.endpoint}/${currentModel}:generateContent?key=${aiConfig.apiKey}`;
         payload = {
           contents: [{
             parts: [{ text: prompt }]
           }]
         };
 
-        console.log("🚀 Envoi de l'analyse au moteur IA (Gemini)...");
+        console.log(`🚀 Analyse en cours avec ${currentModel}...`);
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -65,12 +80,12 @@ export async function POST(req: Request) {
         }
       } else if (aiConfig.provider === AI_PROVIDERS.OPENAI) {
         payload = {
-          model: aiConfig.model,
+          model: currentModel,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
         };
 
-        console.log("🚀 Envoi de l'analyse au moteur IA (OpenAI)...");
+        console.log(`🚀 Analyse en cours avec ${currentModel} (OpenAI)...`);
         response = await fetch(aiConfig.endpoint!, {
           method: 'POST',
           headers: {
@@ -86,12 +101,12 @@ export async function POST(req: Request) {
         }
       } else if (aiConfig.provider === AI_PROVIDERS.ANTHROPIC) {
         payload = {
-          model: aiConfig.model,
+          model: currentModel,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 4096,
         };
 
-        console.log("🚀 Envoi de l'analyse au moteur IA (Anthropic)...");
+        console.log(`🚀 Analyse en cours avec ${currentModel} (Anthropic)...`);
         response = await fetch(aiConfig.endpoint!, {
           method: 'POST',
           headers: {
@@ -117,17 +132,30 @@ export async function POST(req: Request) {
         errorData = { error: { message: errorText } };
       }
 
-      console.error(`❌ Erreur IA (${response!.status}):`, errorData.error?.message || "Erreur inconnue");
+      const errorMessage = errorData.error?.message || "Erreur inconnue";
+      console.error(`❌ Erreur IA (${response!.status}) avec ${currentModel}:`, errorMessage);
 
-      if ((response!.status === 429 || response!.status >= 500) && retries > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return callAIWithRetry(retries - 1, delay * 2);
+      // Si erreur de quota (429), on tente la rotation du modèle si possible
+      if (response!.status === 429 && aiConfig.provider === AI_PROVIDERS.GEMINI && modelIndex < GEMINI_FALLBACK_MODELS.length - 1) {
+        console.warn(`🔄 Quota dépassé pour ${currentModel}. Rotation vers le modèle suivant...`);
+        return callAIWithRotation(modelIndex + 1, 2, 1000);
       }
 
-      throw new Error(errorData.error?.message || `Erreur IA (${response!.status})`);
+      // Réessais classiques si erreur temporaire
+      if ((response!.status === 429 || response!.status >= 500) && retriesPerModel > 0) {
+        console.log(`🕒 Attente de ${delay}ms avant nouvel essai...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callAIWithRotation(modelIndex, retriesPerModel - 1, delay * 2);
+      }
+
+      throw new Error(errorMessage || `Erreur IA (${response!.status})`);
     };
 
-    const text = await callAIWithRetry();
+    const text = await callAIWithRotation();
+
+    // Sauvegarde en cache pour 2 heures
+    aiCache.set(prompt, text, 2);
+
     return NextResponse.json({ analysis: text });
 
   } catch (error: unknown) {

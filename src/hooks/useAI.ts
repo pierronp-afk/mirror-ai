@@ -84,7 +84,10 @@ export function useAI() {
           // On augmente le contexte news à 1000 caractères pour plus de profondeur
           newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 1000)}`;
         }
-      } catch (e) { console.error("News enrichment failed", e); }
+      } catch (e) {
+        console.error("News enrichment failed", e);
+        // On continue sans les news si l'enrichissement échoue (souvent lié aux quotas API externes)
+      }
 
       const prompt = buildIndividualStockPrompt(
         stock.symbol,
@@ -112,6 +115,11 @@ export function useAI() {
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const newSignal = JSON.parse(jsonMatch[0]);
+        // Note: data.cached indique si la réponse vient du cache serveur
+        if (data.cached) {
+          console.log(`ℹ️ [Cache] Analyse récupérée pour ${stock.symbol}`);
+        }
+
         // Normalisation for UI compatibility (rec vs advice)
         if (newSignal.rec && !newSignal.advice) newSignal.advice = newSignal.rec;
 
@@ -138,8 +146,12 @@ export function useAI() {
         });
         return newSignal;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur analyzeStock:", err);
+      // On propage l'erreur avec un message explicite si c'est un quota
+      if (err.message?.includes('quota') || err.message?.includes('429')) {
+        throw new Error("Limite de quota atteinte. Veuillez réessayer plus tard ou attendre le rafraîchissement.");
+      }
       return null;
     }
   };
