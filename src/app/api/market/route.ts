@@ -125,7 +125,12 @@ async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
     try {
         console.log(`🔍 Tentative de fallback Yahoo pour ${symbol}...`);
         // Using Yahoo Finance public chart API as a fallback for quotes
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`);
+        // Adding a User-Agent is often required to avoid being blocked by Yahoo
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
         if (!res.ok) return null;
 
         const data = await res.json();
