@@ -261,9 +261,9 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </div>
                             <div className="mt-1 flex flex-col items-center">
                                 <span className="text-[9px] font-black text-slate-500">
-                                    {rawPrice.toFixed(2)} {isUS ? '$' : '€'}
+                                    {hasValidPrice ? `${rawPrice.toFixed(2)} ${isUS ? '$' : '€'}` : '---'}
                                 </span>
-                                {isUS && exchangeRate && (
+                                {isUS && hasValidPrice && exchangeRate && (
                                     <span className="text-[7px] font-bold text-slate-400 leading-none">
                                         (1€ = {exchangeRate.toFixed(4)}$)
                                     </span>

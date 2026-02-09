@@ -127,17 +127,29 @@ async function getStooqFallback(symbol: string): Promise<FinnhubQuote | null> {
         let stooqSymbol = symbol;
         if (symbol.endsWith('.PA')) stooqSymbol = symbol.replace('.PA', '.FR');
 
-        const res = await fetch(`https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`);
-        if (!res.ok) return null;
+        const res = await fetch(`https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+
+        if (!res.ok) {
+            console.error(`❌ Stooq fetch failed for ${stooqSymbol}: ${res.status}`);
+            return null;
+        }
 
         const text = await res.text();
         const lines = text.split('\n');
-        if (lines.length < 2) return null;
+        if (lines.length < 2) {
+            console.warn(`⚠️ Stooq returned empty CSV for ${stooqSymbol}`);
+            return null;
+        }
 
         const data = lines[1].split(',');
         const close = parseFloat(data[6]);
 
         if (!isNaN(close) && close > 0) {
+            console.log(`✅ Stooq success for ${symbol} -> ${stooqSymbol}: ${close}`);
             return {
                 c: close,
                 d: close - parseFloat(data[3] || "0"),
@@ -145,6 +157,8 @@ async function getStooqFallback(symbol: string): Promise<FinnhubQuote | null> {
                 pc: parseFloat(data[3] || "0"),
                 t: Math.floor(Date.now() / 1000)
             };
+        } else {
+            console.warn(`⚠️ Stooq returned invalid price for ${stooqSymbol}: ${data[6]}`);
         }
     } catch (err) {
         console.error(`❌ Erreur fallback Stooq pour ${symbol}:`, err);
@@ -160,14 +174,14 @@ async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
         // We use the quote endpoint which is more robust for single prices
         const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
             }
         });
 
         if (!res.ok) {
             const errBody = await res.text();
-            console.error(`❌ Yahoo V7 error [${res.status}]:`, errBody);
+            console.error(`❌ Yahoo V7 error [${res.status}] for ${symbol}:`, errBody);
             return null;
         }
 
@@ -175,6 +189,7 @@ async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
         const result = data?.quoteResponse?.result?.[0];
 
         if (result && result.regularMarketPrice) {
+            console.log(`✅ Yahoo success for ${symbol}: ${result.regularMarketPrice}`);
             return {
                 c: result.regularMarketPrice,
                 d: result.regularMarketChange || 0,

@@ -13,9 +13,37 @@ export function useAI() {
     setError(null);
 
     try {
+      // 1. Enrichissement Macro (News & Sentiment de TOUT le portefeuille)
+      let macroNewsContext = "";
+      if (stocks.length > 0) {
+        // On récupère les actualités pour tous les titres du portefeuille
+        const allSymbols = stocks.map(s => s.symbol);
+        const newsPromises = allSymbols.map(async sym => {
+          try {
+            const res = await fetch(`/api/market-enrich?symbol=${sym}`);
+            const data = await res.json();
+            // On limite à un titre par ligne pour ne pas saturer le prompt si le portefeuille est gros
+            return data.headlines?.length ? `[${sym}] ${data.headlines[0]}` : "";
+          } catch { return ""; }
+        });
+        const allHeadlines = (await Promise.all(newsPromises)).filter(Boolean).join("\n");
+        if (allHeadlines) {
+          macroNewsContext = `\nACTUALITÉS RÉCENTES DU MARCHÉ (TOUS TITRES):\n${allHeadlines}`;
+        }
+      }
+
+      // 2. Contexte Détaillé du Portefeuille
+      const portfolioDetail = stocks.map(s => {
+        const mPrice = marketPrices[s.symbol]?.price || 0;
+        const hasPrice = mPrice > 0;
+        const currentPrice = hasPrice ? mPrice : s.avgPrice;
+        const gain = hasPrice ? (((currentPrice - s.avgPrice) / s.avgPrice) * 100) : 0;
+        return `- ${s.symbol}: ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${hasPrice ? currentPrice + '€' : 'Sync pending'}, Gain: ${hasPrice ? gain.toFixed(2) + '%' : 'N/A'})`;
+      }).join("\n");
+
       // Analyse GLOBALE (Macro)
-      const portfolioSummary = stocks.map(s => `${s.symbol} (${s.shares} titres)`).join(", ") || "Vide";
-      const prompt = buildGlobalPortfolioPrompt(portfolioSummary, tradingDocs.length > 0 ? tradingDocs : undefined);
+      const portfolioContext = `DÉTAIL DU PORTEFEUILLE:\n${portfolioDetail}\n${macroNewsContext}`;
+      const prompt = buildGlobalPortfolioPrompt(portfolioContext, tradingDocs.length > 0 ? tradingDocs : undefined);
 
       const response = await fetch('/api/ai', {
         method: 'POST',

@@ -101,23 +101,28 @@ export function buildGlobalPortfolioPrompt(
         prompt += `DOCUMENTS DE RÉFÉRENCE TRADING:\n${tradingDocs.join('\n\n')}\n\n`;
     }
 
-    prompt += `MISSION : Analyse de la santé macro et de la stratégie globale du portefeuille : ${portfolioSummary}.
+    prompt += `MISSION : Analyse technique et macro-économique de la santé globale du portefeuille.
+    
+    CONTEXTE :
+    ${portfolioSummary}
     
     INSTRUCTIONS :
-    - Évalue la santé globale (health) avec un terme financier.
+    - Évalue la santé globale (health) avec un terme financier technique robuste.
+    - Analyse l'impact des actualités fournies sur la stratégie globale.
     - Donne une prédiction de tendance à 3 mois (XX%).
-    - Propose des scénarios d'arbitrage macro (vendre un secteur pour un autre).
-    - Donne un conseil d'équilibre général (balanceAdvice).
+    - Propose des scénarios d'arbitrage macro (rotation sectorielle, couverture).
+    - Fournis un "Flash Actu" (newsHighlight) résumant l'événement boursier le plus impactant ici.
 
     RÉPONSE STRICTE JSON :
     {
       "health": "TERME",
-      "healthDesc": "Synthèse technique",
+      "healthDesc": "Synthèse technique macro détaillée",
       "prediction": "+XX%",
-      "predictionDesc": "Contexte macro",
+      "predictionDesc": "Contexte boursier et catalyseurs",
+      "newsHighlight": "Flash info marché majeur",
       "opportunities": [{"title": "Texte", "description": "Texte", "type": "LONG/SHORT/FUSIL"}],
       "scenarios": [{"title": "Texte", "description": "Texte", "action": "Texte"}],
-      "balanceAdvice": "Texte global",
+      "balanceAdvice": "Conseil d'allocation globale",
       "forecast": [{"date": "ISO", "value": 0}]
     }`;
 
