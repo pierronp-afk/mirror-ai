@@ -12,6 +12,8 @@ export const AI_PROVIDERS = {
 } as const;
 
 export const GEMINI_MODELS = {
+    FLASH_3: 'gemini-3-flash',
+    FLASH_LATEST: 'gemini-flash-latest',
     FLASH: 'gemini-1.5-flash',
     FLASH_8B: 'gemini-1.5-flash-8b',
     FLASH_2_0: 'gemini-2.0-flash-exp',
@@ -19,9 +21,9 @@ export const GEMINI_MODELS = {
 } as const;
 
 export const GEMINI_FALLBACK_MODELS = [
-    GEMINI_MODELS.FLASH,
+    GEMINI_MODELS.FLASH_3,
+    GEMINI_MODELS.FLASH_LATEST,
     GEMINI_MODELS.FLASH_2_0,
-    GEMINI_MODELS.FLASH_8B,
 ];
 
 export type AIProviderType = typeof AI_PROVIDERS[keyof typeof AI_PROVIDERS];
@@ -44,7 +46,7 @@ export function getAIConfig(): AIConfig {
             return {
                 provider: AI_PROVIDERS.GEMINI,
                 apiKey: process.env.GEMINI_API_KEY || '',
-                model: GEMINI_MODELS.FLASH,
+                model: GEMINI_MODELS.FLASH_3,
                 endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
             };
 
@@ -68,7 +70,7 @@ export function getAIConfig(): AIConfig {
             return {
                 provider: AI_PROVIDERS.GEMINI,
                 apiKey: process.env.GEMINI_API_KEY || '',
-                model: GEMINI_MODELS.FLASH,
+                model: GEMINI_MODELS.FLASH_3,
                 endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
             };
     }

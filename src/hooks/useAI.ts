@@ -81,12 +81,12 @@ export function useAI() {
         const headlines = data.headlines?.join(". ") || "";
         if (headlines) {
           const sentiment = await getFinancialSentiment(headlines);
-          // On augmente le contexte news à 1000 caractères pour plus de profondeur
-          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 1000)}`;
+          // On réduit à la valeur d'hier (300) pour éviter tout changement de comportement
+          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 300)}`;
         }
       } catch (e) {
         console.error("News enrichment failed", e);
-        // On continue sans les news si l'enrichissement échoue (souvent lié aux quotas API externes)
+        // On continue sans les news si l'enrichissement échoue
       }
 
       const prompt = buildIndividualStockPrompt(
