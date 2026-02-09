@@ -25,6 +25,8 @@ export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 100
             // Note: We use the symbols from the scope. If symbolsKey is same, content is same.
 
             // --- THROTTLING HORAIRE (07:30 - 23:00) ---
+            // NOTE: Désactivé temporairement car non conscient de la timezone et bloque les sync initiales
+            /*
             const now = new Date();
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
@@ -38,6 +40,7 @@ export function useMarketData(symbols: string[], refreshInterval = 15 * 60 * 100
                 setLoading(false);
                 return;
             }
+            */
 
             try {
                 setLoading(true);

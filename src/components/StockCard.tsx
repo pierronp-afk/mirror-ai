@@ -45,8 +45,11 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
     // Gains in EUR
     const totalValueEur = stock.shares * currentPriceEur;
     const totalCostEur = stock.shares * avgPrice;
-    const gainEur = totalValueEur - totalCostEur;
-    const gainPercent = totalCostEur > 0 ? (gainEur / totalCostEur) * 100 : 0;
+
+    // Si le prix actuel est 0, on ne peut pas calculer de gain réaliste (le titre est probablement en attente de sync)
+    const hasValidPrice = rawPrice > 0;
+    const gainEur = hasValidPrice ? (totalValueEur - totalCostEur) : 0;
+    const gainPercent = (hasValidPrice && totalCostEur > 0) ? (gainEur / totalCostEur) * 100 : 0;
     const isPos = gainEur >= 0;
 
     const dailyChangePercent = marketData?.changePercent || 0;
@@ -209,15 +212,26 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                     <div className="mt-6">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Performance Globale</p>
                         <div className="flex items-baseline gap-3">
-                            <h4 className={`text-4xl font-black tracking-tighter ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {isPos ? '+' : ''}{gainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                            <h4 className={`text-4xl font-black tracking-tighter ${!hasValidPrice ? 'text-slate-300' : (isPos ? 'text-emerald-500' : 'text-rose-500')}`}>
+                                {!hasValidPrice ? '--- €' : `${isPos ? '+' : ''}${gainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`}
                             </h4>
-                            <span className={`text-sm font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                ({isPos ? '+' : ''}{gainPercent.toFixed(2)}%)
-                            </span>
+                            {hasValidPrice && (
+                                <span className={`text-sm font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    ({isPos ? '+' : ''}{gainPercent.toFixed(2)}%)
+                                </span>
+                            )}
+                            {!hasValidPrice && (
+                                <span className="text-xs font-bold text-slate-300 uppercase italic tracking-widest animate-pulse">
+                                    En attente de cours...
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs font-medium text-slate-400 mt-1">
-                            Gain Jour: {isDailyGainPos ? '+' : ''}{dailyGainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} ({dailyChangePercent.toFixed(2)}%)
+                            {hasValidPrice ? (
+                                <>Gain Jour: {isDailyGainPos ? '+' : ''}{dailyGainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} ({dailyChangePercent.toFixed(2)}%)</>
+                            ) : (
+                                "Synchronisation en cours..."
+                            )}
                         </p>
                     </div>
 

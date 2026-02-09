@@ -158,20 +158,33 @@ export async function GET(req: Request) {
         }
 
         const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
-        const data = await response.json() as any;
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Finnhub API Error [${response.status}] for ${symbol}:`, errorText);
+
             if (response.status === 429) {
                 return NextResponse.json({ error: "Limite API", symbol, c: 0, limited: true }, { status: 429 });
             }
-            throw new Error(response.statusText);
+            if (response.status === 403 || response.status === 401) {
+                return NextResponse.json({ error: "Accès refusé Finnhub (vérifiez la clé ou le plan)", symbol, c: 0, forbidden: true }, { status: 200 });
+            }
+            // Au lieu de throw, on retourne 200 avec c:0 pour ne pas casser le hook frontend
+            return NextResponse.json({ error: `Erreur Finnhub ${response.status}`, symbol, c: 0 }, { status: 200 });
         }
 
-        if (data.c) setCachedData(symbol, data);
-        return NextResponse.json(data);
+        const data = await response.json() as any;
+
+        if (data.c) {
+            setCachedData(symbol, data);
+            return NextResponse.json(data);
+        } else {
+            console.warn(`⚠️ Pas de prix (c=0) retourné par Finnhub pour ${symbol}. Symbole peut-être invalide ou non supporté.`);
+            return NextResponse.json({ ...data, warning: "Symbole non supporté ou données manquantes" });
+        }
 
     } catch (error: any) {
-        console.error(`❌ Erreur /api/market:`, error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error(`❌ Erreur critique /api/market pour ${symbol}:`, error.message);
+        return NextResponse.json({ error: error.message, c: 0 }, { status: 200 }); // On reste sur 200 pour le frontend
     }
 }
