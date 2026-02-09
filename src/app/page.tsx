@@ -432,15 +432,26 @@ export default function Dashboard() {
             onClick={async () => {
               setShowAIModal(true);
               // 1. Analyse Macro
-              analyzePortfolio(stocks, effectiveMarketPrices);
+              await analyzePortfolio(stocks, effectiveMarketPrices);
 
-              // 2. Analyses Micro (Individuelles) pour chaque titre pour assurer 100% de couverture
-              stocks.forEach(async (s) => {
+              // Fonction utilitaire pour le délai
+              const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+              // 2. Analyses Micro (Séquentielles pour préserver les quotas API)
+              for (const s of stocks) {
                 const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
                 const isUS = !s.symbol.includes('.');
                 const priceEur = isUS ? (price / eurUsdRate) : price;
-                await analyzeStock(s, priceEur);
-              });
+
+                try {
+                  await analyzeStock(s, priceEur);
+                  // On attend 3 secondes entre chaque titre pour respecter la limite RPM
+                  await delay(3500);
+                } catch (err) {
+                  console.error(`Erreur quota pour ${s.symbol}:`, err);
+                  await delay(5000); // Pause plus longue en cas d'échec
+                }
+              }
             }}
             className="bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
           >

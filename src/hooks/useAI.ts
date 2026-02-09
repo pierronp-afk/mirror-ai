@@ -101,7 +101,12 @@ export function useAI() {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Erreur IA");
+      if (!response.ok) {
+        if (response.status === 429 || (data.message && data.message.includes('quota'))) {
+          console.warn(`🕒 Quota atteint pour ${stock.symbol}, attente suggérée...`);
+        }
+        throw new Error(data.message || "Erreur IA");
+      }
 
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
