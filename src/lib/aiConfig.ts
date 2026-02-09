@@ -102,6 +102,8 @@ export function buildPortfolioAnalysisPrompt(
 
 INSTRUCTIONS DÉTAILLÉES :
 1. ANALYSE PORTEFEUILLE (Signals) :
+   - Tu DOIS impérativement fournir une analyse pour CHAQUE titre listé dans le contexte. Le tableau 'signals' doit avoir la même longueur que la liste des titres fournis.
+   - Même si aucune action n'est requise, fournis un signal avec l'avis "Conserver". Aucun titre ne doit être oublié.
    - Pour CHAQUE titre, fournis des recommandations CHIFFRÉES précises.
    - Inclure des métriques de simulation : RSI estimé, Sentiment (FinBert-style -1 à 1), Poids actuel vs Poids idéal.
    - Fournir un "Scenario Suggéré" clair : ex: "Vendre 33% de la ligne pour ramener le poids à 10%".

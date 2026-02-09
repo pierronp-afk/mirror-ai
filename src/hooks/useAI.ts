@@ -16,9 +16,9 @@ export function useAI() {
       // 1. Enrichissement des données (News & Sentiment)
       let enrichedContext = "";
       if (stocks.length > 0) {
-        // Obtenir les news pour les titres majeurs (ex: top 3)
-        const top3Symbols = stocks.slice(0, 3).map(s => s.symbol);
-        const newsPromises = top3Symbols.map(async sym => {
+        // Obtenir les news pour les titres majeurs (passé de 3 à 5 pour une meilleure couverture)
+        const topSymbols = stocks.slice(0, 5).map(s => s.symbol);
+        const newsPromises = topSymbols.map(async sym => {
           try {
             const res = await fetch(`/api/market-enrich?symbol=${sym}`);
             const data = await res.json();
@@ -36,9 +36,13 @@ export function useAI() {
 
       const portfolioContext = stocks.length > 0
         ? stocks.map(s => {
-          const currentPrice = marketPrices[s.symbol]?.price || s.avgPrice;
-          const gain = ((currentPrice - s.avgPrice) / s.avgPrice) * 100;
-          return `${s.symbol} (${s.name || 'N/A'}): ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${currentPrice}€, ${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%)`;
+          const mPrice = marketPrices[s.symbol]?.price;
+          const hasPrice = mPrice && mPrice > 0;
+          const currentPrice = hasPrice ? mPrice : s.avgPrice;
+          const gain = hasPrice ? (((currentPrice - s.avgPrice) / s.avgPrice) * 100) : 0;
+          const priceLabel = hasPrice ? `${currentPrice}€` : "PRIX NON DISPONIBLE (utiliser avgPrice comme proxy)";
+
+          return `${s.symbol} (${s.name || 'N/A'}): ${s.shares} titres @ ${s.avgPrice}€ (Actuel: ${priceLabel}, Gain: ${hasPrice ? (gain >= 0 ? '+' : '') + gain.toFixed(2) + '%' : 'N/A'})`;
         }).join(', ')
         : "Portefeuille vide.";
 

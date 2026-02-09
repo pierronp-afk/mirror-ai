@@ -124,29 +124,38 @@ async function getCompanyProfile(symbol: string, apiKey: string) {
 async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
     try {
         console.log(`🔍 Tentative de fallback Yahoo pour ${symbol}...`);
-        // Using Yahoo Finance public chart API as a fallback for quotes
-        // Adding a User-Agent is often required to avoid being blocked by Yahoo
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`, {
+
+        // Yahoo uses slightly different symbols sometimes, but .PA and common ones usually match
+        // We use the quote endpoint which is more robust for single prices
+        const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json'
             }
         });
-        if (!res.ok) return null;
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            console.error(`❌ Yahoo V7 error [${res.status}]:`, errBody);
+            return null;
+        }
 
         const data = await res.json();
-        const meta = data?.chart?.result?.[0]?.meta;
+        const result = data?.quoteResponse?.result?.[0];
 
-        if (meta && meta.regularMarketPrice) {
+        if (result && result.regularMarketPrice) {
             return {
-                c: meta.regularMarketPrice,
-                d: meta.regularMarketPrice - meta.chartPreviousClose,
-                dp: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100,
-                pc: meta.chartPreviousClose,
-                t: Math.floor(Date.now() / 1000)
+                c: result.regularMarketPrice,
+                d: result.regularMarketChange || 0,
+                dp: result.regularMarketChangePercent || 0,
+                pc: result.regularMarketPreviousClose || 0,
+                t: result.regularMarketTime || Math.floor(Date.now() / 1000)
             };
+        } else {
+            console.warn(`⚠️ Yahoo n'a pas trouvé de résultat pour ${symbol}`);
         }
     } catch (err) {
-        console.error(`❌ Yahoo fallback failed for ${symbol}:`, err);
+        console.error(`❌ Erreur critique fallback Yahoo pour ${symbol}:`, err);
     }
     return null;
 }
