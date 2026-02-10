@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Stock, MarketPrices, AIAnalysis } from '@/types';
-import { buildGlobalPortfolioPrompt, buildIndividualStockPrompt, buildQuestionPrompt, getFinancialSentiment } from '@/lib/aiConfig';
+import { buildGlobalPortfolioPrompt, buildIndividualStockPrompt, buildQuestionPrompt } from '@/lib/aiConfig';
 
 export function useAI() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -73,20 +73,17 @@ export function useAI() {
 
   const analyzeStock = async (stock: Stock, marketPrice: number): Promise<any> => {
     try {
-      // Enrichment for single stock
+      // 1. Enrichissement News (On garde l'extraction mais on ne fait plus de requête IA séparée pour le sentiment)
       let newsContext = "";
       try {
         const res = await fetch(`/api/market-enrich?symbol=${stock.symbol}`);
         const data = await res.json();
         const headlines = data.headlines?.join(". ") || "";
         if (headlines) {
-          const sentiment = await getFinancialSentiment(headlines);
-          // On réduit à la valeur d'hier (300) pour éviter tout changement de comportement
-          newsContext = `Mood: ${sentiment.sentiment} (${sentiment.score}). News: ${headlines.slice(0, 300)}`;
+          newsContext = headlines.slice(0, 500); // Plus de contexte car on économise des appels
         }
       } catch (e) {
         console.error("News enrichment failed", e);
-        // On continue sans les news si l'enrichissement échoue
       }
 
       const prompt = buildIndividualStockPrompt(
@@ -101,7 +98,11 @@ export function useAI() {
       const response = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+          prompt,
+          cacheKey: stock.symbol, // Cache par symbole d'action
+          cacheTTL: 15            // 15 minutes demandées par l'utilisateur
+        })
       });
 
       const data = await response.json();

@@ -25,16 +25,19 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { prompt } = await req.json();
+    const { prompt, cacheKey, cacheTTL } = await req.json();
 
     if (!prompt) {
       return NextResponse.json({ error: "Le prompt est requis" }, { status: 400 });
     }
 
-    // 1. Vérification du cache (TTL 2h demandé par l'utilisateur)
-    const cachedResponse = aiCache.get<string>(prompt);
+    // 1. Vérification du cache
+    // On utilise cacheKey (ex: symbole) si fourni, sinon le prompt complet
+    const effectiveCacheKey = cacheKey || prompt;
+    const cachedResponse = aiCache.get<string>(effectiveCacheKey);
+
     if (cachedResponse) {
-      console.log("♻️ Réponse récupérée depuis le cache.");
+      console.log(`♻️ Réponse récupérée depuis le cache (Clé: ${cacheKey || 'Prompt'}).`);
       return NextResponse.json({ analysis: cachedResponse, cached: true });
     }
 
@@ -51,7 +54,8 @@ export async function POST(req: Request) {
 
       // Configuration selon le provider
       if (aiConfig.provider === AI_PROVIDERS.GEMINI) {
-        const url = `${aiConfig.endpoint}/gemini-flash-latest:generateContent?key=${aiConfig.apiKey}`;
+        // On utilise explicitement gemini-1.5-flash pour la stabilité
+        const url = `${aiConfig.endpoint}/gemini-1.5-flash:generateContent?key=${aiConfig.apiKey}`;
         payload = {
           contents: [{
             parts: [{ text: prompt }]
@@ -137,8 +141,13 @@ export async function POST(req: Request) {
 
     const text = await callAIWithRetry();
 
-    // Sauvegarde en cache pour 2 heures
-    aiCache.set(prompt, text, 2);
+    // Sauvegarde en cache
+    // Si cacheTTL est fourni (en minutes), on l'utilise, sinon 2 heures par défaut
+    if (cacheTTL) {
+      aiCache.setWithMinutes(effectiveCacheKey, text, cacheTTL);
+    } else {
+      aiCache.set(effectiveCacheKey, text, 2);
+    }
 
     return NextResponse.json({ analysis: text });
 

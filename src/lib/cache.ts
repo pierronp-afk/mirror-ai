@@ -23,6 +23,18 @@ class AICache {
     }
 
     /**
+     * Set a value in the cache with a specific TTL in minutes
+     */
+    setWithMinutes(key: string, data: any, ttlMinutes: number = 15): void {
+        const expiry = Date.now() + ttlMinutes * 60 * 1000;
+        this.cache.set(key, { data, expiry });
+
+        if (this.cache.size > 100) {
+            this.cleanup();
+        }
+    }
+
+    /**
      * Get a value from the cache if it hasn't expired
      */
     get<T>(key: string): T | null {

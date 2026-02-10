@@ -169,8 +169,9 @@ ${news ? `\nCONTEXTE ACTUALITÉS & SENTIMENT :\n${news}` : ''}
 INSTRUCTIONS ANALYTIQUES :
 1. ANALYSE TECHNIQUE : Estime le RSI actuel et identifie un Support et une Résistance clés basés sur le contexte news/prix.
 2. ANALYSE FONDAMENTALE : Évalue la pertinence du titre dans le contexte sectoriel actuel cité dans les actualités.
-3. STRATÉGIE DE SORTIE : Calcule un Objectif (Target Price) et un Stop-Loss (Protection de capital) mathématiquement cohérents avec la volatilité suggérée.
-4. DÉCISION : Choisis entre Vendre, Alléger, Conserver, Renforcer ou Acheter. Justifie avec un argument "Killer" (le point le plus critique).
+3. SENTIMENT : Analyse les actualités fournies et classe le sentiment global (BULLISH/BEARISH/NEUTRAL) avec un score de -1.0 à 1.0.
+4. STRATÉGIE DE SORTIE : Calcule un Objectif (Target Price) et un Stop-Loss (Protection de capital) mathématiquement cohérents avec la volatilité suggérée.
+5. DÉCISION : Choisis entre Vendre, Alléger, Conserver, Renforcer ou Acheter. Justifie avec un argument "Killer" (le point le plus critique).
 
 RECOMMANDATION DE POIDS :
 - Suggère l'IdealWeight (en % du portefeuille global, max 20%) pour équilibrer le risque.
@@ -188,7 +189,8 @@ RÉPONSE STRICTE JSON :
   "targetPrice": 0,
   "stopLoss": 0,
   "rsi": 0,
-  "sentiment": 0,
+  "sentiment": "BULLISH/BEARISH/NEUTRAL",
+  "sentimentScore": 0,
   "idealWeight": 0,
   "scenarioSuggestion": {
     "action": "Action concrète immédiate (ex: Placer un ordre limite à X€)",
