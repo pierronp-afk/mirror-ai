@@ -54,8 +54,8 @@ export async function POST(req: Request) {
 
       // Configuration selon le provider
       if (aiConfig.provider === AI_PROVIDERS.GEMINI) {
-        // On utilise explicitement gemini-1.5-flash pour la stabilité
-        const url = `${aiConfig.endpoint}/gemini-1.5-flash:generateContent?key=${aiConfig.apiKey}`;
+        // On utilise le modèle défini dans la configuration (Flash ou Pro)
+        const url = `${aiConfig.endpoint}/${aiConfig.model}:generateContent?key=${aiConfig.apiKey}`;
         payload = {
           contents: [{
             parts: [{ text: prompt }]

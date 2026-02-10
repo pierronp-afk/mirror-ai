@@ -29,10 +29,15 @@ export function getAIConfig(): AIConfig {
 
     switch (provider) {
         case AI_PROVIDERS.GEMINI:
+            const modelType = process.env.GEMINI_MODEL_TYPE || 'flash';
+            // Use 'latest' aliases for stability and auto-updates, or specific versions if needed.
+            // 'gemini-1.5-flash' alias was causing 404/500 errors with v1beta recently, using 'gemini-1.5-flash-latest' is safer.
+            const model = modelType === 'pro' ? 'gemini-1.5-pro-latest' : 'gemini-1.5-flash-latest';
+
             return {
                 provider: AI_PROVIDERS.GEMINI,
                 apiKey: process.env.GEMINI_API_KEY || '',
-                model: 'gemini-1.5-flash',
+                model: model,
                 endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
             };
 
