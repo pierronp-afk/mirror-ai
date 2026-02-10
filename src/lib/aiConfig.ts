@@ -31,8 +31,8 @@ export function getAIConfig(): AIConfig {
         case AI_PROVIDERS.GEMINI:
             const modelType = process.env.GEMINI_MODEL_TYPE || 'flash';
             // Use 'latest' aliases for stability and auto-updates, or specific versions if needed.
-            // 'gemini-1.5-flash' alias was causing 404/500 errors with v1beta recently, using 'gemini-2.5-flash-latest' is safer.
-            const model = modelType === 'pro' ? 'gemini-2.5-pro-latest' : 'gemini-2.5-flash-latest';
+            // Le suffixe 'latest' semble poser problème avec l'API v1beta actuelle. Utilisation des noms standards.
+            const model = modelType === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
             return {
                 provider: AI_PROVIDERS.GEMINI,
