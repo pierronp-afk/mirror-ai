@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { X, Search, TrendingUp } from 'lucide-react';
+import { X, Search, TrendingUp, Globe, Flag } from 'lucide-react';
 
 interface StockSearchResult {
     symbol: string;
@@ -17,6 +17,7 @@ interface AddStockModalProps {
 
 export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: AddStockModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
+    const [market, setMarket] = useState<'all' | 'us' | 'eu' | 'asia'>('all');
     const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedStock, setSelectedStock] = useState<StockSearchResult | null>(null);
@@ -35,9 +36,9 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
 
         setIsSearching(true);
         const timer = setTimeout(async () => {
-            // ... existing code ...
             try {
-                const response = await fetch(`/api/stock-search?q=${encodeURIComponent(searchQuery)}`);
+                // Incorporate market filter into search
+                const response = await fetch(`/api/stock-search?q=${encodeURIComponent(searchQuery)}&market=${market}`);
                 if (!response.ok) throw new Error('Search failed');
 
                 const data = await response.json();
@@ -51,10 +52,9 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+    }, [searchQuery, market]);
 
     const handleSelectStock = async (stock: StockSearchResult) => {
-        // ... existing code ...
         setSelectedStock(stock);
         setSearchQuery(stock.displaySymbol);
         setSearchResults([]);
@@ -68,7 +68,6 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
                 const data = await res.json();
                 if (data.c) {
                     setFetchedPrice(data.c);
-                    // Do NOT auto-fill buyPrice, assume user wants to enter it or leave empty for sync
                 }
             }
         } catch (err) {
@@ -87,12 +86,6 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
         }
 
         const sharesNum = parseFloat(shares);
-        // Use manual buy price if provided, otherwise 0 implies "Sync/Unknown"
-        // But if user left empty, we might want to use fetchedPrice as fallback? 
-        // User asked: "enter without associated price and it syncs when market opens"
-        // This implies Price = 0.
-        // If user wants to accept Current Price, they can click "Utiliser comme PRU".
-        // So if empty, we send 0.
         let priceNum = 0;
         if (buyPrice !== '') {
             priceNum = parseFloat(buyPrice);
@@ -102,8 +95,6 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
             setError('Nombre d\'actions invalide');
             return;
         }
-
-        // Removed the check for priceNum <= 0 to allow sync mode
 
         onAdd(selectedStock.symbol, sharesNum, priceNum, selectedStock.description);
         onClose();
@@ -133,6 +124,38 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
 
                 {/* Body */}
                 <div className="p-8 space-y-6">
+                    {/* Market Selector */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setMarket('all')}
+                            className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${market === 'all' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            <Globe size={14} /> Monde
+                        </button>
+                        <button
+                            onClick={() => setMarket('us')}
+                            className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${market === 'us' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            🇺🇸 US
+                        </button>
+                        <button
+                            onClick={() => setMarket('eu')}
+                            className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${market === 'eu' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            🇪🇺 Europe
+                        </button>
+                        <button
+                            onClick={() => setMarket('asia')}
+                            className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${market === 'asia' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            🌏 Asie
+                        </button>
+                    </div>
+
                     {/* Search Input */}
                     <div className="relative">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
@@ -144,7 +167,12 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Ex: Tesla, AAPL, Microsoft..."
+                                placeholder={
+                                    market === 'all' ? "Ex: Tesla, LVMH, Toyota..." :
+                                        market === 'us' ? "Ex: Apple, Microsoft, Tesla..." :
+                                            market === 'eu' ? "Ex: LVMH, Shell, SAP..." :
+                                                "Ex: Toyota, Tencent, Samsung..."
+                                }
                                 className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all"
                                 autoFocus
                             />

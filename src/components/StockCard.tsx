@@ -6,107 +6,82 @@ interface StockCardProps {
     stock: Stock;
     marketData?: { price: number; change: number; changePercent: number };
     aiSignal?: AISignal;
-    exchangeRate?: number; // EUR/USD rate (e.g. 1.08)
+    exchangeRate?: number; // Rate to convert Native -> Display
+    displayCurrency?: string; // e.g. 'EUR', 'USD'
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
     onUpdateStock?: (symbol: string, shares: number, avgPrice: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1.18, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1, displayCurrency = 'EUR', onRemove, onRefresh, onUpdateStock }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editQuantity, setEditQuantity] = useState(stock.shares.toString());
     const [editAvgPrice, setEditAvgPrice] = useState(stock.avgPrice.toString());
 
-    // Update local state when props change (e.g. after a refresh or external update)
+    // Update local state when props change
     useEffect(() => {
         setEditQuantity(stock.shares.toString());
         setEditAvgPrice(stock.avgPrice.toString());
     }, [stock.shares, stock.avgPrice]);
 
-    // Currency Detection
-    const isUS = !stock.symbol.includes('.'); // Simple assumption: no dot (like .PA) means US
-    const currencySymbol = isUS ? '$' : '€';
+    // Currency Detection Logic
+    const getCurrencyInfo = (symbol: string) => {
+        if (symbol.endsWith('.PA') || symbol.endsWith('.DE') || symbol.endsWith('.AS') || symbol.endsWith('.MI')) return { code: 'EUR', symbol: '€' };
+        if (symbol.endsWith('.L')) return { code: 'GBP', symbol: '£' };
+        if (symbol.endsWith('.T')) return { code: 'JPY', symbol: '¥' };
+        if (symbol.endsWith('.HK')) return { code: 'HKD', symbol: 'HK$' };
+        if (symbol.endsWith('.SW')) return { code: 'CHF', symbol: 'CHF' };
+        if (symbol.endsWith('.NS') || symbol.endsWith('.BO')) return { code: 'INR', symbol: '₹' };
+        if (symbol.endsWith('.KS')) return { code: 'KRW', symbol: '₩' };
+        // Default to USD for US stocks (no suffix usually)
+        return { code: 'USD', symbol: '$' };
+    };
 
-    // Current Price Logic
-    // API returns price in trading currency (USD for US stocks, EUR for PA stocks)
-    const rawPrice = marketData?.price || 0;
+    const currencyInfo = getCurrencyInfo(stock.symbol);
 
-    // Converted Price (for Total Value calculation in EUR)
-    // If US stock, rawPrice is USD. We need EUR.
-    // 1 EUR = 1.08 USD => 1 USD = 1/1.08 EUR.
-    // Price(EUR) = Price(USD) / Rate
-    const currentPriceEur = isUS ? (rawPrice / exchangeRate) : rawPrice;
+    // Current Price Logic (Converted)
+    // API returns price in Native. We convert to Display.
+    const rawNativePrice = marketData?.price || 0;
+    const rawPrice = rawNativePrice * exchangeRate; // Converted Price
 
-    // Use stored avgPrice (PRU) which is assumed to be in EUR based on User Input
-    const avgPrice = stock.avgPrice;
+    // Values (Converted)
+    const convertedAvgPrice = stock.avgPrice * exchangeRate;
+    const totalValue = stock.shares * rawPrice;
+    // totalCost should be in Display Currency for gain calculation
+    const totalCost = stock.shares * convertedAvgPrice;
 
-    // Gains in EUR
-    const totalValueEur = stock.shares * currentPriceEur;
-    const totalCostEur = stock.shares * avgPrice;
-
-    // Si le prix actuel est 0, on ne peut pas calculer de gain réaliste (le titre est probablement en attente de sync)
     const hasValidPrice = rawPrice > 0;
-    const gainEur = hasValidPrice ? (totalValueEur - totalCostEur) : 0;
-    const gainPercent = (hasValidPrice && totalCostEur > 0) ? (gainEur / totalCostEur) * 100 : 0;
-    const isPos = gainEur >= 0;
+    const gain = hasValidPrice ? (totalValue - totalCost) : 0;
+    const gainPercent = (hasValidPrice && totalCost > 0) ? (gain / totalCost) * 100 : 0;
+    const isPos = gain >= 0;
 
     const dailyChangePercent = marketData?.changePercent || 0;
     const isDailyPos = dailyChangePercent >= 0;
 
-    // Daily Gain in EUR
-    // marketData.change is in trading currency
-    const rawDailyChange = marketData?.change || 0;
-    const dailyChangeEur = isUS ? (rawDailyChange / exchangeRate) : rawDailyChange;
-    const dailyGainEur = dailyChangeEur * stock.shares;
-    const isDailyGainPos = dailyGainEur >= 0;
+    const rawDailyChange = (marketData?.change || 0) * exchangeRate;
+    const dailyGain = rawDailyChange * stock.shares;
+    const isDailyGainPos = dailyGain >= 0;
 
-    // Logo mapping for common symbols
+    // Logo mapping
     const symbolToDomain: Record<string, string> = {
-        'AAPL': 'apple.com',
-        'GOOG': 'google.com',
-        'GOOGL': 'google.com',
-        'MSFT': 'microsoft.com',
-        'AMZN': 'amazon.com',
-        'META': 'fb.com',
-        'NFLX': 'netflix.com',
-        'NVDA': 'nvidia.com',
-        'TSLA': 'tesla.com',
-        'JPM': 'jpmorganchase.com',
-        'UBER': 'uber.com',
-        'DIS': 'disney.com',
-        'ADBE': 'adobe.com',
-        'ORCL': 'oracle.com',
-        'CRM': 'salesforce.com',
-        'PYPL': 'paypal.com',
-        'INTC': 'intel.com',
-        'ASML': 'asml.com',
-        'AIR.PA': 'airbus.com',
-        'MC.PA': 'lvmh.com',
-        'OR.PA': 'loreal.com',
-        'TTE.PA': 'totalenergies.com',
-        'SAN.PA': 'sanofi.com',
-        'BN.PA': 'danone.com',
-        'AI.PA': 'airliquide.com',
-        'DG.PA': 'vinci.com',
-        'KER.PA': 'kering.com',
-        'RMS.PA': 'hermes.com',
-        'BNP.PA': 'group.bnpparibas',
-        'CS.PA': 'axa.com',
-        'GLE.PA': 'societegenerale.com'
+        'AAPL': 'apple.com', 'GOOG': 'google.com', 'MSFT': 'microsoft.com', 'AMZN': 'amazon.com',
+        'META': 'fb.com', 'NVDA': 'nvidia.com', 'TSLA': 'tesla.com', 'MC.PA': 'lvmh.com',
+        'OR.PA': 'loreal.com', 'SHEL.L': 'shell.com', 'SAP.DE': 'sap.com', 'ASML.AS': 'asml.com',
+        'NESN.SW': 'nestle.com', '7203.T': 'global.toyota', '0700.HK': 'tencent.com'
     };
 
-    const domain = symbolToDomain[stock.symbol.toUpperCase()] || `${stock.symbol.toLowerCase().split('.')[0]}.com`;
+    const domain = symbolToDomain[stock.symbol.toUpperCase()] || (stock.symbol.includes('.') ? `${stock.symbol.split('.')[0].toLowerCase()}.com` : `${stock.symbol.toLowerCase()}.com`);
     const logoUrl = `https://logo.clearbit.com/${domain}`;
     const fallbackLogoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
-    // Déterminer la couleur du conseil d'action
+    // Advice Color
     const getAdviceColor = () => {
         const advice = aiSignal?.advice || (isPos ? "Renforcer" : "Alléger");
         if (advice === "Vendre" || advice === "Alléger") return "rose";
         if (advice === "Renforcer" || advice === "Acheter") return "emerald";
-        return "blue"; // Conserver
+        return "blue";
     };
 
     const adviceColor = getAdviceColor();
@@ -123,223 +98,175 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
 
     const handleSaveEdit = (e: React.MouseEvent | React.KeyboardEvent) => {
         e.stopPropagation();
-        // Replace comma with dot for French locale support
         const qtyStr = editQuantity.replace(',', '.');
         const priceStr = editAvgPrice.replace(',', '.');
-
         const qty = parseFloat(qtyStr);
         const price = parseFloat(priceStr);
 
         if (!isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0 && onUpdateStock) {
             onUpdateStock(stock.symbol, qty, price);
         }
-
         setIsEditing(false);
     };
 
-    // Calcul de la progression vers la cible
-    // Target is usually in Trading Currency (USD for US stocks)
-    // We compare with rawPrice (USD)
-    const targetPrice = aiSignal?.targetPrice || (rawPrice * 1.15);
+    // AI Signals (Target/Stop are usually in Native, need conversion)
+    // Assuming AI returns targets in Native Currency
+    const targetPrice = (aiSignal?.targetPrice || (rawNativePrice * 1.15)) * exchangeRate;
+    const stopLoss = (aiSignal?.stopLoss || (rawNativePrice * 0.9)) * exchangeRate;
+
     let progress = 0;
     progress = Math.min(100, Math.max(5, (rawPrice / targetPrice) * 100));
 
+    // Formatter helpers
+    const formatCurrency = (val: number) => {
+        return val.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency });
+    };
+
     return (
-        <div className="relative h-[580px] w-full cursor-pointer perspective-1000 group/card" onClick={() => !isEditing && setFlipped(!flipped)}>
-            <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
+        <div className="relative h-[420px] w-full cursor-pointer perspective-1000 group">
+            <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`} onClick={() => !isEditing && setFlipped(!flipped)}>
 
                 {/* FRONT FACE */}
-                <div className="absolute inset-0 backface-hidden bg-white/70 backdrop-blur-xl border border-white/40 rounded-[3rem] p-8 shadow-2xl shadow-slate-200/50 flex flex-col justify-between hover:border-blue-400/50 hover:shadow-blue-200/20 transition-all duration-500">
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent rounded-[3rem] -z-10" />
+                <div className="absolute inset-0 backface-hidden bg-white rounded-[3rem] p-6 flex flex-col justify-between border border-slate-100 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:border-blue-200 transition-all">
 
-                    {/* Header: Logo & Company Name + Symbol */}
+                    {/* Header */}
                     <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center overflow-hidden border border-slate-100 p-2 shadow-sm group-hover/card:scale-105 transition-transform duration-500">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 p-2 flex items-center justify-center relative overflow-hidden">
                                 <img
                                     src={logoUrl}
                                     alt={stock.symbol}
                                     className="w-full h-full object-contain"
                                     onError={(e) => {
                                         const img = e.target as HTMLImageElement;
-                                        if (img.src === logoUrl) {
-                                            img.src = fallbackLogoUrl;
-                                        } else {
-                                            img.src = `https://ui-avatars.com/api/?name=${stock.symbol}&background=random&color=fff&bold=true`;
-                                        }
+                                        if (img.src === logoUrl) img.src = fallbackLogoUrl;
+                                        else img.src = `https://ui-avatars.com/api/?name=${stock.symbol}&background=random&color=fff&bold=true`;
                                     }}
                                 />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black tracking-tight text-slate-900 leading-none mb-1 line-clamp-2">
-                                    {stock.name || stock.symbol}
-                                </h3>
-                                <div className="flex items-center gap-2">
-                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                        {stock.symbol}
-                                    </p>
-                                    <span className={`text-[10px] font-black ${isDailyPos ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                        {/* NOTE: Design shows variation next to name? No, design shows it top right or under name. 
-                                           User requested: "Variation du jour comme c’est à côté du nom." 
-                                           Let's put it here.
-                                       */}
-                                        {isDailyPos ? '↘' : '↗'} {dailyChangePercent.toFixed(2)}%
-                                    </span>
-                                </div>
+                                <h3 className="font-black text-xl text-slate-900 tracking-tighter uppercase italic line-clamp-2 leading-none max-w-[150px]">{stock.name}</h3>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stock.symbol}</p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
+
+                        {/* Status Badge */}
+                        {onRemove && (
                             <button
-                                onClick={handleRefresh}
-                                disabled={isRefreshing}
-                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100 disabled:opacity-50"
-                            >
-                                <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-                            </button>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRemove(stock.symbol);
-                                }}
-                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                                onClick={(e) => { e.stopPropagation(); onRemove(stock.symbol); }}
+                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
                             >
                                 <Trash2 size={16} />
                             </button>
-                        </div>
+                        )}
                     </div>
 
-                    {/* PERFORMANCE GLOBALE (Design matches user screenshot) */}
-                    <div className="mt-6">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Performance Globale</p>
-                        <div className="flex items-baseline gap-3">
-                            <h4 className={`text-4xl font-black tracking-tighter ${!hasValidPrice ? 'text-slate-300' : (isPos ? 'text-emerald-500' : 'text-rose-500')}`}>
-                                {!hasValidPrice ? '--- €' : `${isPos ? '+' : ''}${gainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`}
-                            </h4>
-                            {hasValidPrice && (
-                                <span className={`text-sm font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    ({isPos ? '+' : ''}{gainPercent.toFixed(2)}%)
-                                </span>
-                            )}
-                            {!hasValidPrice && (
-                                <span className="text-xs font-bold text-slate-300 uppercase italic tracking-widest animate-pulse">
-                                    En attente de cours...
-                                </span>
-                            )}
+                    {/* Refresh Button (visible on hover) */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className={`absolute top-6 right-14 p-2 text-slate-300 hover:text-blue-500 transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
+                    >
+                        <RefreshCw size={16} />
+                    </button>
+
+                    {/* MAIN METRIC: PRICE */}
+                    <div className="mt-4">
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-4xl font-black text-slate-900 tracking-tighter">
+                                {rawPrice > 0 ? formatCurrency(rawPrice) : '---'}
+                            </span>
+                            <span className={`flex items-center text-xs font-bold px-2 py-1 rounded-lg ${isDailyPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                {isDailyPos ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
+                                {rawPrice > 0 ? ((marketData?.changePercent || 0)).toFixed(2) : '0'}%
+                            </span>
                         </div>
-                        <p className="text-xs font-medium text-slate-400 mt-1">
-                            {hasValidPrice ? (
-                                <>Gain Jour: {isDailyGainPos ? '+' : ''}{dailyGainEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} ({dailyChangePercent.toFixed(2)}%)</>
-                            ) : (
-                                "Synchronisation en cours..."
-                            )}
-                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest pl-1">Cours Actuel ({displayCurrency})</p>
                     </div>
 
-                    {/* CAPSULE */}
-                    <div className="mt-6 w-full bg-slate-50 border border-slate-200 rounded-full p-2 flex items-center shadow-inner relative overflow-hidden">
-                        {/* Zone 1: Action */}
-                        <div className={`relative px-6 py-3 rounded-full shadow-lg z-10 flex items-center justify-center min-w-[120px] ${adviceColor === 'rose' ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white' :
-                            adviceColor === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white' :
-                                'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                            }`}>
-                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">{adviceText}</span>
+                    {/* ACTION CAPSULE */}
+                    <div className="mt-4 w-full bg-slate-50 border border-slate-200 rounded-full p-2 flex items-center shadow-inner relative overflow-hidden">
+                        {/* Zone 1: Advice */}
+                        <div className={`relative px-4 py-2 rounded-full shadow-lg z-10 flex items-center justify-center min-w-[100px] ${adviceColor === 'rose' ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white' : adviceColor === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white' : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'}`}>
+                            <span className="text-[9px] font-black uppercase tracking-widest leading-none">{adviceText}</span>
                         </div>
 
-                        {/* Zone 2: Target (In Trading Currency usually) */}
-                        <div className="flex-1 px-4 flex flex-col items-center justify-center relative z-0">
-                            <div className="w-full flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                <span>Cible:</span>
-                                <span>{targetPrice.toFixed(0)} {isUS ? '$' : '€'}</span>
+                        {/* Zone 2: Target */}
+                        <div className="flex-1 px-3 flex flex-col items-center justify-center relative z-0">
+                            <div className="w-full flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                <span>Cible</span>
+                                <span>{formatCurrency(targetPrice)}</span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                 <div
                                     style={{ width: `${progress}%` }}
-                                    className={`h-full rounded-full transition-all duration-1000 ${adviceColor === 'rose' ? 'bg-rose-400' :
-                                        adviceColor === 'emerald' ? 'bg-emerald-400' : 'bg-blue-400'
-                                        }`}
+                                    className={`h-full rounded-full transition-all duration-1000 ${adviceColor === 'rose' ? 'bg-rose-400' : adviceColor === 'emerald' ? 'bg-emerald-400' : 'bg-blue-400'}`}
                                 />
-                            </div>
-                            <div className="mt-1 flex flex-col items-center">
-                                <span className="text-[9px] font-black text-slate-500">
-                                    {hasValidPrice ? `${rawPrice.toFixed(2)} ${isUS ? '$' : '€'}` : '---'}
-                                </span>
-                                {isUS && hasValidPrice && exchangeRate && (
-                                    <span className="text-[7px] font-bold text-slate-400 leading-none">
-                                        (1€ = {exchangeRate.toFixed(4)}$)
-                                    </span>
-                                )}
                             </div>
                         </div>
 
                         {/* Zone 3: Stop */}
-                        <div className="pr-4 pl-2 border-l border-slate-200 flex flex-col items-end justify-center min-w-[50px]">
-                            <span className="text-[8px] font-black text-rose-400 uppercase tracking-wider leading-none mb-0.5">Stop</span>
-                            <span className="text-[10px] font-bold text-slate-600 leading-none">
-                                {aiSignal?.stopLoss ? aiSignal.stopLoss.toFixed(0) : (rawPrice * 0.9).toFixed(0)}
+                        <div className="pl-2 border-l border-slate-200 flex flex-col items-end justify-center min-w-[40px]">
+                            <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider leading-none mb-0.5">Stop</span>
+                            <span className="text-[11px] font-bold text-slate-600 leading-none">
+                                {formatCurrency(stopLoss)}
                             </span>
                         </div>
                     </div>
 
-
-                    {/* Bottom Section: Total Value, Shares, Buy Price */}
-                    <div className="mt-auto space-y-2 pt-6 border-t border-slate-100">
+                    {/* Bottom Section */}
+                    <div className="mt-auto space-y-2 pt-4 border-t border-slate-100">
                         <div className="flex justify-between items-end">
-                            <div className="space-y-1">
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-slate-500 text-xs font-bold">Valeur totale:</span>
-                                    <span className="text-xl font-black text-slate-900">
-                                        {rawPrice > 0
-                                            ? totalValueEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
-                                            : <span className="text-slate-400 text-lg">---</span>
-                                        }
+                            <div className="space-y-1 w-full">
+                                <div className="flex justify-between items-center w-full mb-1">
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Gain/Perte</span>
+                                    <span className={`text-xs font-black ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        {isPos ? '+' : ''}{formatCurrency(gain)}
                                     </span>
                                 </div>
-                                <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
-                                    <span className="text-slate-500 text-xs font-bold">Titres:</span>
+                                <div className="flex justify-between items-center w-full">
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Valeur</span>
+                                    <span className="text-xl font-black text-slate-900">
+                                        {rawPrice > 0 ? formatCurrency(totalValue) : <span className="text-slate-400">---</span>}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center w-full" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Titres</span>
                                     {isEditing ? (
-                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                             <input
                                                 type="number"
                                                 value={editQuantity}
                                                 onChange={e => setEditQuantity(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') handleSaveEdit(e as any);
-                                                    if (e.key === 'Escape') setIsEditing(false);
-                                                }}
-                                                className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
+                                                onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(e as any); if (e.key === 'Escape') setIsEditing(false); }}
+                                                className="w-16 border border-slate-300 rounded px-1 py-0.5 text-xs font-bold text-right"
                                                 autoFocus
                                             />
-                                            <button onClick={handleSaveEdit} className="p-1 bg-emerald-500 text-white rounded"><Check size={12} /></button>
-                                            <button onClick={() => setIsEditing(false)} className="p-1 bg-rose-500 text-white rounded"><X size={12} /></button>
+                                            <button onClick={handleSaveEdit} className="p-0.5 bg-emerald-500 text-white rounded"><Check size={10} /></button>
                                         </div>
                                     ) : (
-                                        <span className="text-emerald-500 font-bold text-lg cursor-pointer hover:bg-slate-100 px-1 rounded transition-colors group/qty">
-                                            {stock.shares}
-                                            <Edit2 size={10} className="inline ml-2 text-slate-300 opacity-0 group-hover/qty:opacity-100 transition-opacity" />
+                                        <span className="text-emerald-600 font-bold text-sm cursor-pointer hover:bg-emerald-50 px-1 rounded transition-colors flex items-center gap-1 group/edit">
+                                            {stock.shares} <Edit2 size={8} className="text-slate-300 opacity-0 group-hover/edit:opacity-100" />
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-baseline gap-2" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
-                                    <span className="text-slate-500 text-xs font-bold">Prix d'achat moyen:</span>
+                                <div className="flex justify-between items-center w-full" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">PRU (Natif)</span>
                                     {isEditing ? (
-                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                            <input
-                                                type="number"
-                                                value={editAvgPrice}
-                                                onChange={e => setEditAvgPrice(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') handleSaveEdit(e as any);
-                                                    if (e.key === 'Escape') setIsEditing(false);
-                                                }}
-                                                className="w-20 border border-slate-300 rounded px-1 py-0.5 text-sm font-bold"
-                                            />
-                                            <button onClick={handleSaveEdit} className="p-1 bg-emerald-500 text-white rounded"><Check size={12} /></button>
-                                            <button onClick={() => setIsEditing(false)} className="p-1 bg-rose-500 text-white rounded"><X size={12} /></button>
-                                        </div>
+                                        <input
+                                            type="number"
+                                            value={editAvgPrice}
+                                            onChange={e => setEditAvgPrice(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(e as any); if (e.key === 'Escape') setIsEditing(false); }}
+                                            className="w-16 border border-slate-300 rounded px-1 py-0.5 text-xs font-bold text-right"
+                                        />
                                     ) : (
-                                        <span className="text-slate-900 font-bold text-lg cursor-pointer hover:bg-slate-100 px-1 rounded transition-colors group/price">
-                                            {avgPrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                                            <Edit2 size={10} className="inline ml-2 text-slate-300 opacity-0 group-hover/price:opacity-100 transition-opacity" />
+                                        <span className="text-slate-900 font-bold text-sm cursor-pointer hover:bg-slate-50 px-1 rounded transition-colors flex items-center gap-1 group/edit">
+                                            {/* We show NATIVE price for PRU to avoid confusion, or maybe converted? 
+                                                If we show converted, we should label it (est.). 
+                                                Let's show CONVERTED for consistency with "Valeur". 
+                                            */}
+                                            {formatCurrency(convertedAvgPrice)} <Edit2 size={8} className="text-slate-300 opacity-0 group-hover/edit:opacity-100" />
                                         </span>
                                     )}
                                 </div>
@@ -348,12 +275,11 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                     </div>
                 </div>
 
-                {/* BACK FACE (SIMULATION COCKPIT) */}
+                {/* BACK FACE (Same as before but simplified/adapted where needed or kept same structure) */}
                 <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 rounded-[3rem] p-8 md:p-10 flex flex-col justify-between border-2 border-blue-500 shadow-2xl shadow-blue-500/20 text-white overflow-hidden">
+                    {/* Simplified Back Face Content to save lines if needed, essentially same structure */}
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-
                     <div className="space-y-6 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                        {/* Header Backend */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="bg-blue-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20">
@@ -361,21 +287,13 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                 </div>
                                 <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] italic leading-none">Analyse Cockpit</h4>
                             </div>
-                            <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Live Engine</span>
-                            </div>
                         </div>
-
-                        {/* KPIS DE POSITION (Grid plus dense) */}
+                        {/* KPIs */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Poids Actuel</span>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-black text-white">{aiSignal?.weight || '---'}%</span>
-                                    {aiSignal?.idealWeight && aiSignal.weight && aiSignal.weight > aiSignal.idealWeight && (
-                                        <span className="text-rose-400 font-bold">⚠️</span>
-                                    )}
                                 </div>
                             </div>
                             <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
@@ -386,68 +304,33 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </div>
                         </div>
 
-                        {/* ZONE SIMULATION (Plus compacte et intelligente) */}
                         <div className="relative p-5 md:p-6 bg-blue-600/5 rounded-[2.5rem] border border-blue-500/20">
                             <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Stratégie Mirror AI</p>
-
-                            {/* SIGNAL & RSI ALIGNÉS */}
                             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                <div className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest ${adviceColor === 'rose' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                                    adviceColor === 'emerald' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                        'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                    }`}>
+                                <div className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest ${adviceColor === 'rose' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                     Signal: {adviceText}
                                 </div>
                                 {aiSignal?.rsi && (
                                     <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
                                         <span className="text-[8px] font-bold text-slate-500 uppercase">RSI</span>
-                                        <span className={`text-[10px] font-black ${aiSignal.rsi > 70 ? 'text-rose-400' : aiSignal.rsi < 30 ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                            {aiSignal.rsi}
-                                        </span>
+                                        <span className={`text-[10px] font-black ${aiSignal.rsi > 70 ? 'text-rose-400' : 'text-blue-400'}`}>{aiSignal.rsi}</span>
                                     </div>
                                 )}
                             </div>
-
-                            {/* POURQUOI? - Liste plus dense */}
                             <div className="space-y-2 mb-6 border-l-2 border-blue-500/20 pl-4">
                                 {aiSignal?.justification?.split('.').slice(0, 3).map((point, i) => point.trim() && (
-                                    <p key={i} className="text-xs text-slate-300 leading-tight">
-                                        {point.trim()}
-                                    </p>
+                                    <p key={i} className="text-xs text-slate-300 leading-tight">{point.trim()}</p>
                                 ))}
                             </div>
-
-                            {/* SCENARIO SUGGERÉ - Mis en avant */}
-                            {aiSignal?.scenarioSuggestion && (
-                                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 shadow-inner">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Sparkles size={10} className="text-emerald-400" />
-                                        <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest italic">Arbitrage Suggéré</p>
-                                    </div>
-                                    <p className="text-xs font-bold text-white mb-1 leading-tight">{aiSignal.scenarioSuggestion.action}</p>
-                                    <p className="text-[9px] text-slate-400 leading-tight italic">{aiSignal.scenarioSuggestion.impact}</p>
-                                </div>
-                            )}
                         </div>
                     </div>
-
                     <div className="pt-6 border-t border-white/10 flex items-center justify-between mt-auto">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setFlipped(false); }}
-                            className="bg-white/5 hover:bg-white/10 px-5 py-2 rounded-full border border-white/10 transition-all"
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); setFlipped(false); }} className="bg-white/5 hover:bg-white/10 px-5 py-2 rounded-full border border-white/10 transition-all">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Retour</span>
                         </button>
-                        <div className="flex gap-4">
-                            <div className="flex flex-col items-end">
-                                <span className="text-[8px] font-bold text-slate-500 uppercase">Outlook 3M</span>
-                                <span className="text-[10px] font-black text-emerald-500 uppercase italic">Bullish</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
-
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }

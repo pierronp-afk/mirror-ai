@@ -13,36 +13,90 @@ interface FinnhubQuote {
     t?: number;
 }
 
-// Cache système pour éviter de surcharger l'API Finnhub
+// Cache entry interface
 interface CacheEntry {
     data: FinnhubQuote;
     timestamp: number;
+    ttl: number; // Dynamic TTL stored with entry
 }
 
 const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes for stocks
-const FOREX_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for forex
+
+// Rate Limiting for Yahoo
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 100;
 let requestCount = 0;
 let windowStart = Date.now();
 
 function isRateLimited(): boolean {
     const now = Date.now();
-
-    // Réinitialiser le compteur si la fenêtre est passée
     if (now - windowStart > RATE_LIMIT_WINDOW) {
         requestCount = 0;
         windowStart = now;
         return false;
     }
-
-    // Limiter à 30 requêtes par minute (Finnhub free tier = 60/min, on garde de la marge)
-    if (requestCount >= 30) {
+    if (requestCount >= MAX_REQUESTS_PER_WINDOW) {
         return true;
     }
-
     requestCount++;
     return false;
+}
+
+// Helper to check if a specific market is open
+// Returns true if current time is within trading hours
+function isMarketOpen(symbol: string): boolean {
+    const now = new Date();
+    const utcHour = now.getUTCHours();
+    const utcMinute = now.getUTCMinutes();
+    const day = now.getUTCDay(); // 0 = Sun, 6 = Sat
+
+    // Weekend check (Saturday/Sunday)
+    if (day === 0 || day === 6) return false;
+
+    // Convert current time to minutes from midnight UTC for easier comparison
+    const currentMinutes = utcHour * 60 + utcMinute;
+
+    // US Market (NYSE/NASDAQ)
+    // 9:30 - 16:00 EST => 14:30 - 21:00 UTC (approx, ignoring DST exactness for simplicity or maintainance)
+    const isUS = !symbol.includes('.');
+    if (isUS) {
+        return currentMinutes >= (14 * 60 + 30) && currentMinutes < (21 * 60);
+    }
+
+    // European Markets (Euronext, LSE, XETRA)
+    // Roughly 08:00 - 16:30 UTC
+    const isEU = symbol.endsWith('.PA') || symbol.endsWith('.L') || symbol.endsWith('.DE') || symbol.endsWith('.AS') || symbol.endsWith('.SW');
+    if (isEU) {
+        return currentMinutes >= (8 * 60) && currentMinutes < (16 * 60 + 30);
+    }
+
+    // Asian Markets (Tokyo, HK, etc)
+    // Roughly 00:00 - 06:00 UTC
+    const isAsia = symbol.endsWith('.T') || symbol.endsWith('.HK') || symbol.endsWith('.KS') || symbol.endsWith('.NS');
+    if (isAsia) {
+        return currentMinutes >= 0 && currentMinutes < (6 * 60);
+    }
+
+    // Default to US hours if unknown
+    return currentMinutes >= (14 * 60 + 30) && currentMinutes < (21 * 60);
+}
+
+function getAdaptiveTTL(symbol: string): number {
+    const now = new Date();
+    const day = now.getUTCDay();
+
+    // 1. Weekend Strategy
+    if (day === 0 || day === 6) {
+        return 4 * 60 * 60 * 1000; // 4 hours
+    }
+
+    // 2. Market Hours Strategy
+    if (isMarketOpen(symbol)) {
+        return 2 * 60 * 1000; // 2 minutes (Active Trading)
+    }
+
+    // 3. Off-Hours Strategy
+    return 60 * 60 * 1000; // 1 hour
 }
 
 function getCachedData(symbol: string): FinnhubQuote | null {
@@ -50,10 +104,7 @@ function getCachedData(symbol: string): FinnhubQuote | null {
     if (!entry) return null;
 
     const now = Date.now();
-    const isForex = symbol.startsWith('FX:') || symbol.startsWith('OANDA:');
-    const ttl = isForex ? FOREX_CACHE_TTL : CACHE_TTL;
-
-    if (now - entry.timestamp > ttl) {
+    if (now - entry.timestamp > entry.ttl) {
         cache.delete(symbol);
         return null;
     }
@@ -62,23 +113,24 @@ function getCachedData(symbol: string): FinnhubQuote | null {
 }
 
 function setCachedData(symbol: string, data: FinnhubQuote): void {
+    const ttl = getAdaptiveTTL(symbol);
+    // console.log(`💾 Caching ${symbol} for ${ttl / 1000 / 60} minutes`);
     cache.set(symbol, {
         data,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ttl
     });
 }
 
-// ... imports et cache existants ...
-
 async function getForexRate(symbol: string) {
-    // Only support EUR/USD for now as it's the primary need
     if (symbol !== 'FX:EURUSD' && symbol !== 'OANDA:EUR_USD' && symbol !== 'EURUSD') {
         return null;
     }
 
     const cacheKey = `forex_${symbol}`;
     const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < FOREX_CACHE_TTL) {
+    // Forex cache can be static 2 min or adaptive, let's keep it simple 2 min for now or use adaptive
+    if (cached && Date.now() - cached.timestamp < 2 * 60 * 1000) {
         return cached.data;
     }
 
@@ -94,7 +146,7 @@ async function getForexRate(symbol: string) {
                 dp: 0,
                 t: Math.floor(Date.now() / 1000)
             };
-            cache.set(cacheKey, { data: quote, timestamp: Date.now() });
+            cache.set(cacheKey, { data: quote, timestamp: Date.now(), ttl: 2 * 60 * 1000 });
             return quote;
         }
     } catch (err) {
@@ -104,10 +156,9 @@ async function getForexRate(symbol: string) {
 }
 
 async function getCompanyProfile(symbol: string, apiKey: string) {
-    // Check cache (profils changent rarement, TTL plus long)
     const cacheKey = `profile_${symbol}`;
     const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) { // 24h cache
+    if (cached && Date.now() - cached.timestamp < 7 * 24 * 60 * 60 * 1000) { // 7 days cache
         return cached.data;
     }
 
@@ -116,63 +167,21 @@ async function getCompanyProfile(symbol: string, apiKey: string) {
     const data = await res.json();
 
     if (data && data.name) {
-        cache.set(cacheKey, { data, timestamp: Date.now() });
+        cache.set(cacheKey, { data, timestamp: Date.now(), ttl: 7 * 24 * 60 * 60 * 1000 });
     }
     return data;
 }
 
-async function getStooqFallback(symbol: string): Promise<FinnhubQuote | null> {
-    try {
-        console.log(`🔍 Tentative de fallback Stooq pour ${symbol}...`);
-        let stooqSymbol = symbol;
-        if (symbol.endsWith('.PA')) stooqSymbol = symbol.replace('.PA', '.FR');
-
-        const res = await fetch(`https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-        });
-
-        if (!res.ok) {
-            console.error(`❌ Stooq fetch failed for ${stooqSymbol}: ${res.status}`);
-            return null;
-        }
-
-        const text = await res.text();
-        const lines = text.split('\n');
-        if (lines.length < 2) {
-            console.warn(`⚠️ Stooq returned empty CSV for ${stooqSymbol}`);
-            return null;
-        }
-
-        const data = lines[1].split(',');
-        const close = parseFloat(data[6]);
-
-        if (!isNaN(close) && close > 0) {
-            console.log(`✅ Stooq success for ${symbol} -> ${stooqSymbol}: ${close}`);
-            return {
-                c: close,
-                d: close - parseFloat(data[3] || "0"),
-                dp: 0,
-                pc: parseFloat(data[3] || "0"),
-                t: Math.floor(Date.now() / 1000)
-            };
-        } else {
-            console.warn(`⚠️ Stooq returned invalid price for ${stooqSymbol}: ${data[6]}`);
-        }
-    } catch (err) {
-        console.error(`❌ Erreur fallback Stooq pour ${symbol}:`, err);
+// Renamed and promoted to Primary Source
+async function getYahooQuote(symbol: string): Promise<FinnhubQuote | null> {
+    if (isRateLimited()) {
+        console.warn(`⏳ Yahoo rate limit hit for ${symbol}`);
+        return null;
     }
-    return null;
-}
 
-async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
     try {
-        console.log(`🔍 Tentative de fallback Yahoo pour ${symbol}...`);
-
-        // Yahoo uses slightly different symbols sometimes, but .PA and common ones usually match
-        // We use the quote endpoint which is more robust for single prices
-        const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, {
+        // Switch to Chart API v8 which is more reliable/open than Quote API v7
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
@@ -180,28 +189,54 @@ async function getYahooFallback(symbol: string): Promise<FinnhubQuote | null> {
         });
 
         if (!res.ok) {
-            const errBody = await res.text();
-            console.error(`❌ Yahoo V7 error [${res.status}] for ${symbol}:`, errBody);
             return null;
         }
 
         const data = await res.json();
-        const result = data?.quoteResponse?.result?.[0];
+        const meta = data?.chart?.result?.[0]?.meta;
 
-        if (result && result.regularMarketPrice) {
-            console.log(`✅ Yahoo success for ${symbol}: ${result.regularMarketPrice}`);
+        if (meta && meta.regularMarketPrice) {
+            const price = meta.regularMarketPrice;
+            const prevClose = meta.chartPreviousClose || price;
+            const change = price - prevClose;
+            const changePercent = (change / prevClose) * 100;
+
             return {
-                c: result.regularMarketPrice,
-                d: result.regularMarketChange || 0,
-                dp: result.regularMarketChangePercent || 0,
-                pc: result.regularMarketPreviousClose || 0,
-                t: result.regularMarketTime || Math.floor(Date.now() / 1000)
+                c: price,
+                d: change,
+                dp: changePercent,
+                pc: prevClose,
+                t: meta.regularMarketTime || Math.floor(Date.now() / 1000)
             };
-        } else {
-            console.warn(`⚠️ Yahoo n'a pas trouvé de résultat pour ${symbol}`);
         }
     } catch (err) {
-        console.error(`❌ Erreur critique fallback Yahoo pour ${symbol}:`, err);
+        console.error(`❌ Yahoo error for ${symbol}:`, err);
+    }
+    return null;
+}
+
+async function getFrankfurterRates() {
+    const cacheKey = 'forex_rates_all';
+    const cached = cache.get(cacheKey);
+    // Cache for 1 hour (Frankfurter updates daily, but we want to avoid spamming)
+    if (cached && Date.now() - cached.timestamp < 60 * 60 * 1000) {
+        return cached.data;
+    }
+
+    try {
+        const res = await fetch('https://api.frankfurter.app/latest?from=EUR');
+        if (!res.ok) return null;
+        const data = await res.json();
+
+        // Structure: { amount: 1, base: "EUR", date: "...", rates: { USD: 1.08, ... } }
+        if (data && data.rates) {
+            // Add base EUR for easier logic checks if needed, though implicit
+            data.rates['EUR'] = 1;
+            cache.set(cacheKey, { data: data.rates, timestamp: Date.now(), ttl: 60 * 60 * 1000 });
+            return data.rates;
+        }
+    } catch (err) {
+        console.error('Frankfurter fetch error:', err);
     }
     return null;
 }
@@ -210,83 +245,71 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const symbolParam = searchParams.get('symbol');
     const symbol = symbolParam?.trim().toUpperCase();
-    const type = searchParams.get('type'); // 'quote' (default) or 'profile'
+    const type = searchParams.get('type');
     const apiKey = process.env.FINNHUB_API_KEY;
 
-    if (!symbol) return NextResponse.json({ error: "Symbole requis" }, { status: 400 });
-    if (!apiKey) return NextResponse.json({ error: "Clé API manquante" }, { status: 500 });
-
     try {
+        // Special endpoint for Global FX Rates
+        if (type === 'forex') {
+            const rates = await getFrankfurterRates();
+            return NextResponse.json(rates || {});
+        }
+
+        if (!symbol) return NextResponse.json({ error: "Symbole requis" }, { status: 400 });
+
         if (type === 'profile') {
-            const profile = await getCompanyProfile(symbol, apiKey);
+            const profile = await getCompanyProfile(symbol, apiKey || "");
             return NextResponse.json(profile || {});
         }
 
-        // Special case for Forex (using Frankfurter as more reliable source)
         if (symbol === 'FX:EURUSD' || symbol === 'OANDA:EUR_USD' || symbol === 'EURUSD') {
             const forexData = await getForexRate(symbol);
-            if (forexData) {
-                return NextResponse.json(forexData);
-            }
-            // Fallback to existing logic if Frankfurter fails
+            if (forexData) return NextResponse.json(forexData);
         }
 
-        // Vérifier le cache d'abord
+        // 1. Check Cache
         const cachedData = getCachedData(symbol);
         if (cachedData) {
-            // console.log(`📦 Cache hit pour ${symbol}`);
             return NextResponse.json({ ...cachedData, cached: true });
         }
 
-        if (isRateLimited()) {
-            return NextResponse.json({ error: "Limite interne", symbol, c: 0, limited: true }, { status: 429 });
+        // 2. Primary Source: Yahoo Finance
+        const yahooData = await getYahooQuote(symbol);
+        if (yahooData) {
+            setCachedData(symbol, yahooData);
+            return NextResponse.json(yahooData);
         }
 
-        const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
+        // 3. Fallback Source: Finnhub (Only for US stocks)
+        // Simple US check: no dots (e.g. AAPL, TSLA)
+        // Complex symbols like MC.PA are definitely not on Finnhub free tier usually in context
+        // If apiKey is missing, skip Finnhub
+        if (apiKey) {
+            const isUSSimple = /^[A-Z]{1,5}$/.test(symbol);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`❌ Finnhub API Error [${response.status}] for ${symbol}:`, errorText);
+            if (isUSSimple) {
+                console.log(`⚠️ Yahoo failed for ${symbol}, trying Finnhub fallback...`);
+                const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
 
-            if (response.status === 429) {
-                return NextResponse.json({ error: "Limite API", symbol, c: 0, limited: true }, { status: 429 });
+                if (response.ok) {
+                    const data = await response.json() as any;
+                    if (data.c && data.c > 0) {
+                        setCachedData(symbol, data); // Cache successful Finnhub result
+                        return NextResponse.json(data);
+                    }
+                }
             }
-            if (response.status === 403 || response.status === 401) {
-                return NextResponse.json({ error: "Accès refusé Finnhub (vérifiez la clé ou le plan)", symbol, c: 0, forbidden: true }, { status: 200 });
-            }
-            // Au lieu de throw, on retourne 200 avec c:0 pour ne pas casser le hook frontend
-            return NextResponse.json({ error: `Erreur Finnhub ${response.status}`, symbol, c: 0 }, { status: 200 });
         }
 
-        const data = await response.json() as any;
-
-        if (data.c && data.c > 0) {
-            setCachedData(symbol, data);
-            return NextResponse.json(data);
-        } else {
-            console.warn(`⚠️ Pas de prix (c=0) retourné par Finnhub pour ${symbol}. Tentative de fallback Yahoo...`);
-
-            // Fallback Yahoo
-            const yahooData = await getYahooFallback(symbol);
-            if (yahooData) {
-                console.log(`✅ Succès fallback Yahoo pour ${symbol}: ${yahooData.c}`);
-                setCachedData(symbol, yahooData);
-                return NextResponse.json(yahooData);
-            }
-
-            // Fallback Stooq
-            const stooqData = await getStooqFallback(symbol);
-            if (stooqData) {
-                console.log(`✅ Succès fallback Stooq pour ${symbol}: ${stooqData.c}`);
-                setCachedData(symbol, stooqData);
-                return NextResponse.json(stooqData);
-            }
-
-            return NextResponse.json({ ...data, warning: "Symbole non supporté ou données manquantes" });
-        }
+        return NextResponse.json({
+            error: "Data unavailable",
+            symbol,
+            c: 0,
+            warning: "Yahoo failed and Finnhub fallback skipped or failed"
+        }, { status: 200 });
 
     } catch (error: any) {
-        console.error(`❌ Erreur critique /api/market pour ${symbol}:`, error.message);
-        return NextResponse.json({ error: error.message, c: 0 }, { status: 200 }); // On reste sur 200 pour le frontend
+        console.error(`❌ Critical error /api/market for ${symbol}:`, error.message);
+        return NextResponse.json({ error: error.message, c: 0 }, { status: 200 });
     }
 }

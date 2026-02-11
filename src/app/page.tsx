@@ -48,6 +48,26 @@ export default function Dashboard() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [localMarketPrices, setLocalMarketPrices] = useState<MarketPrices>({});
 
+  // Currency State
+  const [displayCurrency, setDisplayCurrency] = useState('EUR');
+  const [forexRates, setForexRates] = useState<Record<string, number>>({});
+
+  // Fetch Forex Rates on Mount
+  useEffect(() => {
+    const fetchForex = async () => {
+      try {
+        const res = await fetch('/api/market?type=forex');
+        if (res.ok) {
+          const rates = await res.json();
+          setForexRates(rates);
+        }
+      } catch (err) {
+        console.error('Failed to fetch forex rates:', err);
+      }
+    };
+    fetchForex();
+  }, []);
+
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const tradingDocInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -74,7 +94,34 @@ export default function Dashboard() {
   }, [initialPrices, localMarketPrices]);
 
   // Taux de change EUR/USD (1 EUR = x USD)
-  const eurUsdRate = effectiveMarketPrices['FX:EURUSD']?.price || effectiveMarketPrices['OANDA:EUR_USD']?.price || 1.18;
+  // Taux de change EUR/USD (1 EUR = x USD) - Legacy fallback, now using forexRates
+  const eurUsdRate = forexRates['USD'] || effectiveMarketPrices['FX:EURUSD']?.price || effectiveMarketPrices['OANDA:EUR_USD']?.price || 1.18;
+
+  // Helper to get exchange rate from Stock Currency -> Display Currency
+  // Base is EUR.
+  // Rate(EUR -> Target) = forexRates[Target]
+  // Rate(Native -> Target) = Rate(EUR -> Target) / Rate(EUR -> Native)
+  const getConversionRate = useCallback((stockSymbol: string) => {
+    if (Object.keys(forexRates).length === 0) return 1;
+
+    let nativeCurrency = 'USD'; // Default assumption if unknown
+    if (stockSymbol.endsWith('.PA') || stockSymbol.endsWith('.DE') || stockSymbol.endsWith('.AS') || stockSymbol.endsWith('.MI') || stockSymbol.endsWith('.MC')) nativeCurrency = 'EUR';
+    else if (stockSymbol.endsWith('.L')) nativeCurrency = 'GBP';
+    else if (stockSymbol.endsWith('.T')) nativeCurrency = 'JPY';
+    else if (stockSymbol.endsWith('.HK')) nativeCurrency = 'HKD';
+    else if (stockSymbol.endsWith('.SW')) nativeCurrency = 'CHF';
+    else if (stockSymbol.endsWith('.NS')) nativeCurrency = 'INR';
+    else if (stockSymbol.endsWith('.KS')) nativeCurrency = 'KRW';
+    // US stocks have no suffix
+
+    // Check if display currency is the same as native
+    if (nativeCurrency === displayCurrency) return 1;
+
+    const rateEurToNative = nativeCurrency === 'EUR' ? 1 : (forexRates[nativeCurrency] || 1);
+    const rateEurToTarget = displayCurrency === 'EUR' ? 1 : (forexRates[displayCurrency] || 1);
+
+    return rateEurToTarget / rateEurToNative;
+  }, [forexRates, displayCurrency]);
 
   if (Object.keys(effectiveMarketPrices).length > 0) {
     console.log(`📊 Rate Debug: FX: ${effectiveMarketPrices['FX:EURUSD']?.price}, OANDA: ${effectiveMarketPrices['OANDA:EUR_USD']?.price}, Using: ${eurUsdRate}`);
@@ -184,11 +231,10 @@ export default function Dashboard() {
   const totalValue = useMemo(() => {
     return stocks.reduce((acc, s) => {
       const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      const isUS = !s.symbol.includes('.');
-      const priceEur = isUS ? (price / eurUsdRate) : price;
-      return acc + (s.shares * priceEur);
+      const rate = getConversionRate(s.symbol);
+      return acc + (s.shares * price * rate);
     }, 0);
-  }, [stocks, effectiveMarketPrices, eurUsdRate]);
+  }, [stocks, effectiveMarketPrices, getConversionRate]);
 
   const totalCost = useMemo(() => {
     return stocks.reduce((acc, s) => acc + (s.shares * s.avgPrice), 0);
@@ -207,11 +253,12 @@ export default function Dashboard() {
     let minGain = Infinity;
 
     stocks.forEach(s => {
-      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      const isUS = !s.symbol.includes('.');
-      const priceEur = isUS ? (price / eurUsdRate) : price;
+      const currentPrice = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
+      // We calculate gain percentage in NATIVE currency to be accurate to the asset performance
+      // Or converted? Percentage is the same regardless of currency (assuming conversion rate is constant which it isn't strictly, but good enough)
+      // Let's use native calculation for performance signal.
 
-      const gainP = ((priceEur - s.avgPrice) / s.avgPrice) * 100;
+      const gainP = s.avgPrice > 0 ? ((currentPrice - s.avgPrice) / s.avgPrice) * 100 : 0;
       if (gainP > maxGain) { maxGain = gainP; best = s; }
       if (gainP < minGain) { minGain = gainP; worst = s; }
     });
@@ -328,6 +375,19 @@ export default function Dashboard() {
             <h1 className="text-xl font-black tracking-tighter uppercase italic text-slate-900">Mirror<span className="text-blue-600">AI</span></h1>
           </div>
           <div className="flex items-center gap-4">
+
+            {/* Currency Selector */}
+            <div className="hidden md:flex items-center bg-slate-100 rounded-xl p-1 mr-2">
+              {['EUR', 'USD', 'GBP', 'JPY', 'CHF'].map(curr => (
+                <button
+                  key={curr}
+                  onClick={() => setDisplayCurrency(curr)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${displayCurrency === curr ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  {curr}
+                </button>
+              ))}
+            </div>
             <div className="relative group">
               <button
                 onClick={manualRefresh}
@@ -399,13 +459,18 @@ export default function Dashboard() {
               <Activity size={180} />
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2 italic">Valeur Totale du Portefeuille</p>
-            <div className="flex items-baseline gap-4 flex-wrap">
-              <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-slate-900">
-                {totalValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            <div className="flex flex-col gap-2">
+              <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-slate-900 leading-none">
+                {totalValue.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency })}
               </h2>
-              <div className={`flex items-center gap-1 px-4 py-2 rounded-full text-sm font-bold ${totalGain >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                {totalGain >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                {totalGain >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-1 text-lg font-bold ${totalGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {totalGain >= 0 ? '+' : ''}{totalGain.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency })}
+                </div>
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${totalGain >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                  {totalGain >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  {totalGain >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
+                </div>
               </div>
             </div>
           </div>
@@ -553,7 +618,8 @@ export default function Dashboard() {
                   stock={stock}
                   marketData={effectiveMarketPrices[stock.symbol]}
                   aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
-                  exchangeRate={eurUsdRate}
+                  exchangeRate={getConversionRate(stock.symbol)}
+                  displayCurrency={displayCurrency}
                   onRemove={handleRemoveStock}
                   onUpdateStock={updateStock}
                   onRefresh={async (symbol) => {
