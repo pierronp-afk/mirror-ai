@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAIConfig, AI_PROVIDERS } from '@/lib/aiConfig';
-import { aiCache } from '@/lib/cache';
+import { getCachedAnalysis, setCachedAnalysis } from '@/lib/cache/redis';
+import { generateCacheKey, getTTL } from '@/lib/cache/keys';
 
 /**
  * Route API pour interroger l'IA.
@@ -31,13 +32,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le prompt est requis" }, { status: 400 });
     }
 
-    // 1. Vérification du cache
-    // On utilise cacheKey (ex: symbole) si fourni, sinon le prompt complet
-    const effectiveCacheKey = cacheKey || prompt;
-    const cachedResponse = aiCache.get<string>(effectiveCacheKey);
+    // 1. Vérification du cache Redis
+    const effectiveCacheKey = cacheKey
+      ? generateCacheKey('analysis', cacheKey)
+      : generateCacheKey('prompt', Buffer.from(prompt).toString('base64').slice(0, 64));
+
+    const cachedResponse = await getCachedAnalysis(effectiveCacheKey);
 
     if (cachedResponse) {
-      console.log(`♻️ Réponse récupérée depuis le cache (Clé: ${cacheKey || 'Prompt'}).`);
       return NextResponse.json({ analysis: cachedResponse, cached: true });
     }
 
@@ -141,13 +143,10 @@ export async function POST(req: Request) {
 
     const text = await callAIWithRetry();
 
-    // Sauvegarde en cache
-    // Si cacheTTL est fourni (en minutes), on l'utilise, sinon 2 heures par défaut
-    if (cacheTTL) {
-      aiCache.setWithMinutes(effectiveCacheKey, text, cacheTTL);
-    } else {
-      aiCache.set(effectiveCacheKey, text, 2);
-    }
+    // Sauvegarde en cache Redis
+    // Si cacheTTL est fourni (en minutes), on l'utilise, sinon TTL dynamique (2h open / 24h closed)
+    const ttlSeconds = cacheTTL ? cacheTTL * 60 : getTTL();
+    await setCachedAnalysis(effectiveCacheKey, text, ttlSeconds);
 
     return NextResponse.json({ analysis: text });
 
