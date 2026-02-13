@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAIConfig, AI_PROVIDERS } from '@/lib/aiConfig';
-import { getCachedAnalysis, setCachedAnalysis } from '@/lib/cache/redis';
+import { getCached, setCached } from '@/lib/cache';
 import { generateCacheKey, getTTL } from '@/lib/cache/keys';
 
 /**
@@ -32,15 +32,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le prompt est requis" }, { status: 400 });
     }
 
-    // 1. Vérification du cache Redis
+    // 1. Vérification du cache Tiered (L1 Redis / L2 Firestore)
     const effectiveCacheKey = cacheKey
       ? generateCacheKey('analysis', cacheKey)
       : generateCacheKey('prompt', Buffer.from(prompt).toString('base64').slice(0, 64));
 
-    const cachedResponse = await getCachedAnalysis(effectiveCacheKey);
+    const { data: cachedResponse, source } = await getCached(effectiveCacheKey);
 
     if (cachedResponse) {
-      return NextResponse.json({ analysis: cachedResponse, cached: true });
+      return NextResponse.json({
+        analysis: cachedResponse,
+        cached: true,
+        source: source
+      });
     }
 
     // Debug sécurisé
@@ -143,10 +147,10 @@ export async function POST(req: Request) {
 
     const text = await callAIWithRetry();
 
-    // Sauvegarde en cache Redis
+    // Sauvegarde en cache Tiered (Redis & Firestore)
     // Si cacheTTL est fourni (en minutes), on l'utilise, sinon TTL dynamique (2h open / 24h closed)
     const ttlSeconds = cacheTTL ? cacheTTL * 60 : getTTL();
-    await setCachedAnalysis(effectiveCacheKey, text, ttlSeconds);
+    await setCached(effectiveCacheKey, text, ttlSeconds);
 
     return NextResponse.json({ analysis: text });
 

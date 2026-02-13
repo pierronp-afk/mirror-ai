@@ -113,6 +113,17 @@ export function useAI() {
         throw new Error(data.message || "Erreur IA");
       }
 
+      // Logging Cache Status
+      if (data.cached) {
+        if (data.source === 'L1') {
+          console.log(`🟢 L1 HIT (Redis): ${stock.symbol}`);
+        } else if (data.source === 'L2') {
+          console.log(`🟡 L2 HIT (Firestore): ${stock.symbol}`);
+        }
+      } else {
+        console.log(`🔴 Cache MISS: ${stock.symbol}`);
+      }
+
       const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const newSignal = JSON.parse(jsonMatch[0]);
