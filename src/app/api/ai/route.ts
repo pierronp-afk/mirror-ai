@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getAIConfig, AI_PROVIDERS } from '@/lib/aiConfig';
+import { getAIConfig, AI_PROVIDERS, buildIndividualStockPrompt } from '@/lib/aiConfig';
+import { getRAGContext } from '@/lib/rag/context';
 import { getCached, setCached } from '@/lib/cache';
 import { generateCacheKey, getTTL } from '@/lib/cache/keys';
 
@@ -47,6 +48,16 @@ export async function POST(req: Request) {
       });
     }
 
+    // 2. Fetch RAG Context if symbol provided
+    let ragContext = "";
+    let enrichedPrompt = prompt;
+    if (cacheKey) {
+      ragContext = await getRAGContext(cacheKey, cacheKey);
+      if (ragContext) {
+        enrichedPrompt = `${prompt}\n\n### HISTORICAL NEWS CONTEXT (RAG):\n${ragContext}`;
+      }
+    }
+
     // Debug sécurisé
     console.log(`📡 Appel API IA (Provider: ${aiConfig.provider}) avec la clé se terminant par : ...${aiConfig.apiKey.slice(-4)}`);
 
@@ -64,7 +75,7 @@ export async function POST(req: Request) {
         const url = `${aiConfig.endpoint}/${aiConfig.model}:generateContent?key=${aiConfig.apiKey}`;
         payload = {
           contents: [{
-            parts: [{ text: prompt }]
+            parts: [{ text: enrichedPrompt }]
           }]
         };
 
@@ -84,7 +95,7 @@ export async function POST(req: Request) {
       } else if (aiConfig.provider === AI_PROVIDERS.OPENAI) {
         payload = {
           model: aiConfig.model,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: enrichedPrompt }],
           temperature: 0.7,
         };
 
@@ -105,7 +116,7 @@ export async function POST(req: Request) {
       } else if (aiConfig.provider === AI_PROVIDERS.ANTHROPIC) {
         payload = {
           model: aiConfig.model,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: enrichedPrompt }],
           max_tokens: 4096,
         };
 

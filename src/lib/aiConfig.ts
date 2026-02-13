@@ -161,15 +161,25 @@ export function buildIndividualStockPrompt(
     price: number,
     shares: number,
     avgPrice: number,
-    news?: string
+    news?: string,
+    ragContext?: string
 ): string {
-    return `${SYSTEM_PROMPT}
+    let prompt = `${SYSTEM_PROMPT}
 
 MISSION : Analyse AUDIT FINANCIER du titre ${name} (${symbol}).
 DONNÉES : 
 - Position : ${shares} titres détenus à un PRU de ${avgPrice}€.
-- Marché : Prix actuel à ${price > 0 ? price + '€' : 'Non disponible (marché fermé)'}.
-${news ? `\nCONTEXTE ACTUALITÉS & SENTIMENT :\n${news}` : ''}
+- Marché : Prix actuel à ${price > 0 ? price + '€' : 'Non disponible (marché fermé)'}.`;
+
+    if (news) {
+        prompt += `\n\nCONTEXTE ACTUALITÉS RÉCENTES (TEMP RÉEL) :\n${news}`;
+    }
+
+    if (ragContext) {
+        prompt += `\n\nACTUALITÉS ARCHIVÉES & CONTEXTE HISTORIQUE (RAG) :\n${ragContext}`;
+    }
+
+    prompt += `
 
 INSTRUCTIONS ANALYTIQUES :
 1. ANALYSE TECHNIQUE : Estime le RSI actuel et identifie un Support et une Résistance clés basés sur le contexte news/prix.
@@ -202,6 +212,7 @@ RÉPONSE STRICTE JSON :
     "impact": "Conséquence directe sur le risque ou le rendement"
   }
 }`;
+    return prompt;
 }
 
 /**
