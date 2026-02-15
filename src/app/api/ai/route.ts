@@ -4,6 +4,7 @@ import { getRAGContext } from '@/lib/rag/context';
 import { getCached, setCached } from '@/lib/cache';
 import { generateCacheKey, getTTL } from '@/lib/cache/keys';
 import { checkRateLimit } from '@/lib/rateLimiter';
+import crypto from 'crypto';
 
 /**
  * Route API pour interroger l'IA.
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     // 1. Vérification du cache Tiered (L1 Redis / L2 Firestore)
     const effectiveCacheKey = cacheKey
       ? generateCacheKey('analysis', cacheKey)
-      : generateCacheKey('prompt', require('crypto').createHash('sha256').update(prompt).digest('hex'));
+      : generateCacheKey('prompt', crypto.createHash('sha256').update(prompt).digest('hex'));
 
     const { data: cachedResponse, source } = await getCached(effectiveCacheKey);
 

@@ -54,14 +54,16 @@ export function useAI() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Erreur IA");
 
-      const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const globalData = JSON.parse(jsonMatch[0]);
-        setAnalysis(prev => ({
-          ...globalData,
-          signals: prev?.signals || [], // On garde les signaux individuels déjà chargés
-          lastUpdated: Date.now()
-        }));
+      if (data.analysis) {
+        const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const globalData = JSON.parse(jsonMatch[0]);
+          setAnalysis(prev => ({
+            ...globalData,
+            signals: prev?.signals || [], // On garde les signaux individuels déjà chargés
+            lastUpdated: Date.now()
+          }));
+        }
       }
     } catch (err: any) {
       console.error("Erreur global analysis:", err);
@@ -131,34 +133,36 @@ export function useAI() {
         console.log(`🔴 Cache MISS: ${stock.symbol}`);
       }
 
-      const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const newSignal = JSON.parse(jsonMatch[0]);
-        // Normalisation for UI compatibility (rec vs advice)
-        if (newSignal.rec && !newSignal.advice) newSignal.advice = newSignal.rec;
+      if (data.analysis) {
+        const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const newSignal = JSON.parse(jsonMatch[0]);
+          // Normalisation for UI compatibility (rec vs advice)
+          if (newSignal.rec && !newSignal.advice) newSignal.advice = newSignal.rec;
 
-        setAnalysis(prev => {
-          const currentSignals = prev?.signals || [];
-          const index = currentSignals.findIndex(s => s.symbol === stock.symbol);
-          const newSignals = [...currentSignals];
-          if (index >= 0) newSignals[index] = newSignal;
-          else newSignals.push(newSignal);
+          setAnalysis(prev => {
+            const currentSignals = prev?.signals || [];
+            const index = currentSignals.findIndex(s => s.symbol === stock.symbol);
+            const newSignals = [...currentSignals];
+            if (index >= 0) newSignals[index] = newSignal;
+            else newSignals.push(newSignal);
 
-          return {
-            ...prev,
-            health: prev?.health || "Analyse en cours",
-            healthDesc: prev?.healthDesc || "Mise à jour des signaux...",
-            prediction: prev?.prediction || "---",
-            predictionDesc: prev?.predictionDesc || "",
-            opportunities: prev?.opportunities || [],
-            scenarios: prev?.scenarios || [],
-            balanceAdvice: prev?.balanceAdvice || "",
-            forecast: prev?.forecast || [],
-            signals: newSignals,
-            lastUpdated: Date.now()
-          } as AIAnalysis;
-        });
-        return newSignal;
+            return {
+              ...prev,
+              health: prev?.health || "Analyse en cours",
+              healthDesc: prev?.healthDesc || "Mise à jour des signaux...",
+              prediction: prev?.prediction || "---",
+              predictionDesc: prev?.predictionDesc || "",
+              opportunities: prev?.opportunities || [],
+              scenarios: prev?.scenarios || [],
+              balanceAdvice: prev?.balanceAdvice || "",
+              forecast: prev?.forecast || [],
+              signals: newSignals,
+              lastUpdated: Date.now()
+            } as AIAnalysis;
+          });
+          return newSignal;
+        }
       }
     } catch (err) {
       console.error("Erreur analyzeStock:", err);

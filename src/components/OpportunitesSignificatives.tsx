@@ -53,12 +53,16 @@ Return ONLY the JSON.`
                     })
                 });
                 const data = await res.json();
-                const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed.opportunities) {
-                        setOpportunities(parsed.opportunities);
+                if (data.analysis) {
+                    const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        if (parsed.opportunities) {
+                            setOpportunities(parsed.opportunities);
+                        }
                     }
+                } else if (data.error) {
+                    console.error("AI Error:", data.error);
                 }
             } catch (e) {
                 console.error(e);
