@@ -19,6 +19,7 @@
     "newsapi": "^2.4.1",
     "next": "16.1.6",
     "openai": "^6.21.0",
+    "rate-limiter-flexible": "^9.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",

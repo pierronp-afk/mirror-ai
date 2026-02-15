@@ -620,6 +620,7 @@ export default function Dashboard() {
                   aiSignal={analysis?.signals.find(s => s.symbol === stock.symbol)}
                   exchangeRate={getConversionRate(stock.symbol)}
                   displayCurrency={displayCurrency}
+                  portfolioTotalValue={totalValue}
                   onRemove={handleRemoveStock}
                   onUpdateStock={updateStock}
                   onRefresh={async (symbol) => {

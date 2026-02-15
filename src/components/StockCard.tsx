@@ -8,12 +8,13 @@ interface StockCardProps {
     aiSignal?: AISignal;
     exchangeRate?: number; // Rate to convert Native -> Display
     displayCurrency?: string; // e.g. 'EUR', 'USD'
+    portfolioTotalValue?: number; // Total portfolio value for weight calculation
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
     onUpdateStock?: (symbol: string, shares: number, avgPrice: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1, displayCurrency = 'EUR', onRemove, onRefresh, onUpdateStock }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1, displayCurrency = 'EUR', portfolioTotalValue = 0, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -87,6 +88,19 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
     const adviceColor = getAdviceColor();
     const adviceText = aiSignal?.advice || (isPos ? "Renforcer" : "Alléger");
 
+    // Portfolio weight calculation
+    const stockValue = totalValue;
+    const portfolioWeight = portfolioTotalValue > 0 ? (stockValue / portfolioTotalValue) * 100 : 0;
+    const isOverweight = portfolioWeight > 20;
+    const isHighRisk = portfolioWeight > 30;
+
+    const getWeightColor = () => {
+        if (isHighRisk) return 'bg-red-100 text-red-700 border-red-200';
+        if (isOverweight) return 'bg-orange-100 text-orange-700 border-orange-200';
+        if (portfolioWeight > 10) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+    };
+
     const handleRefresh = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (onRefresh && !isRefreshing) {
@@ -131,7 +145,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
 
                     {/* Header */}
                     <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
                             <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 p-2 flex items-center justify-center relative overflow-hidden">
                                 <img
                                     src={logoUrl}
@@ -150,7 +164,15 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </div>
                         </div>
 
-                        {/* Status Badge */}
+                        {/* Portfolio Weight Badge */}
+                        {portfolioTotalValue > 0 && (
+                            <div className={`px-3 py-1.5 rounded-full text-xs font-bold border ${getWeightColor()} flex items-center gap-1.5`}>
+                                <span>{portfolioWeight.toFixed(1)}%</span>
+                                {isOverweight && <AlertTriangle size={12} />}
+                            </div>
+                        )}
+
+                        {/* Remove Button */}
                         {onRemove && (
                             <button
                                 onClick={(e) => { e.stopPropagation(); onRemove(stock.symbol); }}
@@ -213,6 +235,26 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </span>
                         </div>
                     </div>
+
+                    {/* Concentration Risk Warning */}
+                    {(isOverweight || isHighRisk) && (
+                        <div className={`mt-3 rounded-xl p-3 border ${isHighRisk ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle size={14} className={isHighRisk ? 'text-red-600 mt-0.5' : 'text-orange-600 mt-0.5'} />
+                                <div>
+                                    <p className={`text-xs font-bold ${isHighRisk ? 'text-red-900' : 'text-orange-900'} mb-1`}>
+                                        {isHighRisk ? 'RISQUE ÉLEVÉ' : 'Concentration Notable'}
+                                    </p>
+                                    <p className={`text-[10px] ${isHighRisk ? 'text-red-700' : 'text-orange-700'} leading-tight`}>
+                                        {isHighRisk
+                                            ? `Cette position représente ${portfolioWeight.toFixed(1)}% de votre portefeuille. Une concentration >30% expose votre capital à un risque important. Envisagez de diversifier.`
+                                            : `Cette position représente ${portfolioWeight.toFixed(1)}% de votre portefeuille. Restez vigilant et surveillez cette position de près.`
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Bottom Section */}
                     <div className="mt-auto space-y-2 pt-4 border-t border-slate-100">

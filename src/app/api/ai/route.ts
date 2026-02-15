@@ -3,11 +3,13 @@ import { getAIConfig, AI_PROVIDERS, buildIndividualStockPrompt } from '@/lib/aiC
 import { getRAGContext } from '@/lib/rag/context';
 import { getCached, setCached } from '@/lib/cache';
 import { generateCacheKey, getTTL } from '@/lib/cache/keys';
+import { checkRateLimit } from '@/lib/rateLimiter';
 
 /**
  * Route API pour interroger l'IA.
  * Cette route s'exécute côté serveur pour protéger la clé API.
  * Support multi-providers (Gemini, OpenAI, Anthropic).
+ * Rate limiting: 10 requests/minute per IP
  */
 interface GeminiResponse {
   candidates?: {
@@ -18,6 +20,30 @@ interface GeminiResponse {
 }
 
 export async function POST(req: Request) {
+  // Get IP address for rate limiting
+  const ip = req.headers.get('x-forwarded-for') ||
+    req.headers.get('x-real-ip') ||
+    'unknown';
+
+  // Check rate limit
+  const rateCheck = await checkRateLimit(ip, 'user');
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      {
+        error: 'Rate limit exceeded',
+        message: `Too many requests. Please wait ${rateCheck.resetInSeconds} seconds.`,
+        resetInSeconds: rateCheck.resetInSeconds
+      },
+      {
+        status: 429,
+        headers: {
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': rateCheck.resetInSeconds.toString(),
+          'Retry-After': rateCheck.resetInSeconds.toString()
+        }
+      }
+    );
+  }
   const aiConfig = getAIConfig();
 
   if (!aiConfig.apiKey) {
@@ -45,6 +71,10 @@ export async function POST(req: Request) {
         analysis: cachedResponse,
         cached: true,
         source: source
+      }, {
+        headers: {
+          'X-RateLimit-Remaining': rateCheck.remaining.toString()
+        }
       });
     }
 
@@ -163,7 +193,11 @@ export async function POST(req: Request) {
     const ttlSeconds = cacheTTL ? cacheTTL * 60 : getTTL();
     await setCached(effectiveCacheKey, text, ttlSeconds);
 
-    return NextResponse.json({ analysis: text });
+    return NextResponse.json({ analysis: text }, {
+      headers: {
+        'X-RateLimit-Remaining': rateCheck.remaining.toString()
+      }
+    });
 
   } catch (error: unknown) {
     console.error("Erreur Route API AI:", error);
