@@ -157,10 +157,21 @@ export default function Dashboard() {
 
     if (stocksToSync.length > 0) {
       stocksToSync.forEach(s => {
-        const marketPrice = effectiveMarketPrices[s.symbol].price;
+        const marketPriceNative = effectiveMarketPrices[s.symbol].price;
+        // Convert Native Market Price to EUR for storage in PRU
+        const rateNativeToEur = 1 / (forexRates[s.symbol.includes('.') ? 'EUR' : 'USD'] || getConversionRate(s.symbol) || 1);
+        // Correct way using getConversionRate with display=EUR
+        // But getConversionRate uses displayCurrency state.
+        // Let's manually calculate Native -> EUR
+        let nativeCurrency = 'USD';
+        if (s.symbol.endsWith('.PA') || s.symbol.endsWith('.DE') || s.symbol.endsWith('.AS') || s.symbol.endsWith('.MI') || s.symbol.endsWith('.MC')) nativeCurrency = 'EUR';
+        const rateNativeToEur_final = nativeCurrency === 'EUR' ? 1 : (1 / (forexRates[nativeCurrency] || 1));
+
+        const marketPriceEur = marketPriceNative * rateNativeToEur_final;
+
         if (updateStock) {
-          console.log(`Syncing price for ${s.symbol}: ${marketPrice}`);
-          updateStock(s.symbol, s.shares, marketPrice, s.name);
+          console.log(`Syncing price for ${s.symbol}: ${marketPriceNative} (Native) -> ${marketPriceEur} (EUR)`);
+          updateStock(s.symbol, s.shares, marketPriceEur, s.name);
         }
       });
     }
@@ -210,11 +221,19 @@ export default function Dashboard() {
         const updated = importedStocks
           .filter(s => s.symbol && s.symbol.trim() !== "" && !s.symbol.includes("?") && s.symbol.toUpperCase() !== "UNKNOWN")
           .map(imported => {
-            const price = newMarketPrices[imported.symbol] || 0;
+            const priceNative = newMarketPrices[imported.symbol] || 0;
+
+            // Convert Native to EUR for storage
+            let nativeCurrency = 'USD';
+            const s = imported.symbol;
+            if (s.endsWith('.PA') || s.endsWith('.DE') || s.endsWith('.AS') || s.endsWith('.MI') || s.endsWith('.MC')) nativeCurrency = 'EUR';
+            const rateNativeToEur = nativeCurrency === 'EUR' ? 1 : (1 / (forexRates[nativeCurrency] || 1));
+            const priceEur = priceNative * rateNativeToEur;
+
             return {
               symbol: imported.symbol.toUpperCase(),
               shares: imported.shares,
-              avgPrice: price,
+              avgPrice: priceEur,
               name: imported.name || imported.symbol,
               sector: imported.sector
             };
@@ -231,17 +250,27 @@ export default function Dashboard() {
     }
   };
 
+  const rateEurToDisplay = useMemo(() => {
+    return displayCurrency === 'EUR' ? 1 : (forexRates[displayCurrency] || 1);
+  }, [forexRates, displayCurrency]);
+
   const totalValue = useMemo(() => {
     return stocks.reduce((acc, s) => {
-      const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      const rate = getConversionRate(s.symbol);
-      return acc + (s.shares * price * rate);
+      const priceNative = effectiveMarketPrices[s.symbol]?.price;
+      const rateNativeToDisplay = getConversionRate(s.symbol);
+
+      if (priceNative) {
+        return acc + (s.shares * priceNative * rateNativeToDisplay);
+      } else {
+        // Fallback using stored PRU (EUR) converted to display currency
+        return acc + (s.shares * s.avgPrice * rateEurToDisplay);
+      }
     }, 0);
-  }, [stocks, effectiveMarketPrices, getConversionRate]);
+  }, [stocks, effectiveMarketPrices, getConversionRate, rateEurToDisplay]);
 
   const totalCost = useMemo(() => {
-    return stocks.reduce((acc, s) => acc + (s.shares * s.avgPrice), 0);
-  }, [stocks]);
+    return stocks.reduce((acc, s) => acc + (s.shares * s.avgPrice * rateEurToDisplay), 0);
+  }, [stocks, rateEurToDisplay]);
 
   const totalGain = totalValue - totalCost;
   const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
@@ -256,12 +285,18 @@ export default function Dashboard() {
     let minGain = Infinity;
 
     stocks.forEach(s => {
-      const currentPrice = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-      // We calculate gain percentage in NATIVE currency to be accurate to the asset performance
-      // Or converted? Percentage is the same regardless of currency (assuming conversion rate is constant which it isn't strictly, but good enough)
-      // Let's use native calculation for performance signal.
+      const priceNative = effectiveMarketPrices[s.symbol]?.price;
+      let currentPriceEur = s.avgPrice;
 
-      const gainP = s.avgPrice > 0 ? ((currentPrice - s.avgPrice) / s.avgPrice) * 100 : 0;
+      if (priceNative) {
+        // Calculate Native -> EUR
+        let nativeCurrency = 'USD';
+        if (s.symbol.endsWith('.PA') || s.symbol.endsWith('.DE') || s.symbol.endsWith('.AS') || s.symbol.endsWith('.MI') || s.symbol.endsWith('.MC')) nativeCurrency = 'EUR';
+        const rateNativeToEur = nativeCurrency === 'EUR' ? 1 : (1 / (forexRates[nativeCurrency] || 1));
+        currentPriceEur = priceNative * rateNativeToEur;
+      }
+
+      const gainP = s.avgPrice > 0 ? ((currentPriceEur - s.avgPrice) / s.avgPrice) * 100 : 0;
       if (gainP > maxGain) { maxGain = gainP; best = s; }
       if (gainP < minGain) { minGain = gainP; worst = s; }
     });

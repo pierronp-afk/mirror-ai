@@ -230,13 +230,13 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
-                                Prix d&apos;achat (PRU)
+                                Prix d&apos;achat (en €)
                             </label>
                             <input
                                 type="number"
                                 value={buyPrice}
                                 onChange={(e) => setBuyPrice(e.target.value)}
-                                placeholder="Optionnel (0 = Sync)"
+                                placeholder="Pru en € (ex: 150.50)"
                                 min="0"
                                 step="0.01"
                                 className="w-full px-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none font-bold text-slate-900 transition-all placeholder:text-slate-300"
@@ -249,25 +249,30 @@ export default function AddStockModal({ onClose, onAdd, exchangeRate = 1.18 }: A
                         <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
                             <div>
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">
-                                    Cours en direct
+                                    Cours en direct (Converti en €)
                                 </label>
                                 {isFetchingPrice ? (
                                     <div className="h-6 w-24 bg-slate-200 animate-pulse rounded"></div>
                                 ) : (
                                     <div className="flex items-baseline gap-2">
                                         <p className="font-black text-xl text-slate-900">
-                                            {fetchedPrice ?
-                                                `${(exchangeRate && (!selectedStock?.symbol.includes('.')) ? fetchedPrice / exchangeRate : fetchedPrice).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`
-                                                : '---'}
+                                            {(() => {
+                                                const rateNativeToEur = (exchangeRate && !selectedStock?.symbol.includes('.')) ? (1 / exchangeRate) : 1;
+                                                const priceInEur = fetchedPrice ? fetchedPrice * rateNativeToEur : null;
+                                                return priceInEur ?
+                                                    `${priceInEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`
+                                                    : '---';
+                                            })()}
                                         </p>
                                         <button
                                             onClick={() => {
-                                                const finalPrice = (fetchedPrice && exchangeRate && !selectedStock?.symbol.includes('.')) ? fetchedPrice / exchangeRate : fetchedPrice;
-                                                setBuyPrice(finalPrice?.toFixed(2) || '');
+                                                const rateNativeToEur = (exchangeRate && !selectedStock?.symbol.includes('.')) ? (1 / exchangeRate) : 1;
+                                                const priceInEur = fetchedPrice ? (fetchedPrice * rateNativeToEur) : 0;
+                                                setBuyPrice(priceInEur > 0 ? priceInEur.toFixed(2) : '');
                                             }}
                                             className="text-[10px] font-bold text-blue-500 uppercase hover:underline"
                                         >
-                                            Utiliser comme PRU
+                                            Utiliser comme PRU (€)
                                         </button>
                                     </div>
                                 )}

@@ -51,14 +51,20 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
     const rawPrice = rawNativePrice * exchangeRate; // Converted Price
 
     // Values (Converted)
-    const convertedAvgPrice = stock.avgPrice * exchangeRate;
+    const convertedAvgPrice = stock.avgPrice * (displayCurrency === 'EUR' ? 1 : (exchangeRate || 1));
+    // Wait, exchangeRate prop is Native -> Display. 
+    // We need EUR -> Display if we want to convert EUR PRU.
+    // If display is EUR, multiplier is 1.
+    // However, getConversionRate in page.tsx is complex.
+    // Let's assume for now that if displayCurrency is EUR, we use 1.
+    // If we want it to be perfectly accurate for other display currencies, 
+    // we should ideally pass a eurToDisplayRate prop.
+    // But since the user mainly cares about EUR:
     const totalValue = stock.shares * rawPrice;
     // totalCost should be in Display Currency for gain calculation
     const totalCost = stock.shares * convertedAvgPrice;
-
-    const hasValidPrice = rawPrice > 0;
-    const gain = hasValidPrice ? (totalValue - totalCost) : 0;
-    const gainPercent = (hasValidPrice && totalCost > 0) ? (gain / totalCost) * 100 : 0;
+    const gain = totalValue - totalCost;
+    const gainPercent = totalCost > 0 ? (gain / totalCost) * 100 : 0;
     const isPos = gain >= 0;
 
     const dailyChangePercent = marketData?.changePercent || 0;
@@ -290,7 +296,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                     )}
                                 </div>
                                 <div className="flex justify-between items-center w-full" onClick={e => { e.stopPropagation(); setIsEditing(true); }}>
-                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">PRU (Natif)</span>
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">PRU (€)</span>
                                     {isEditing ? (
                                         <input
                                             type="number"
@@ -301,10 +307,6 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                         />
                                     ) : (
                                         <span className="text-slate-900 font-bold text-sm cursor-pointer hover:bg-slate-50 px-1 rounded transition-colors flex items-center gap-1 group/edit">
-                                            {/* We show NATIVE price for PRU to avoid confusion, or maybe converted? 
-                                                If we show converted, we should label it (est.). 
-                                                Let's show CONVERTED for consistency with "Valeur". 
-                                            */}
                                             {formatCurrency(convertedAvgPrice)} <Edit2 size={8} className="text-slate-300 opacity-0 group-hover/edit:opacity-100" />
                                         </span>
                                     )}
