@@ -23,27 +23,33 @@ export function OpportunitesSignificatives() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        prompt: `Identify 5 investment opportunities for a beginner investor.
-                        
-IMPORTANT: ALL text fields in the JSON response (name, simpleReasoning) MUST be written in FRENCH (FRANÇAIS), even if the symbol is for a US stock.
+                        prompt: `MISSION: You are a senior French financial advisor. Your task is to identify 5 high-potential investment opportunities for a beginner investor.
 
-Criteria:
-- NOT already in their portfolio
-- Diversification with their current holdings
-- Mix of: 2 long-term (growth over 2-5 years), 2 short-term (6-12 months), 1 "coup de fusil" (high risk/high reward)
+CRITICAL REQUIREMENT: YOU MUST RESPOND EXCLUSIVELY IN FRENCH (FRANÇAIS). All text fields in the JSON response (name, simpleReasoning) MUST be written in natural, professional French, even if the stock is American.
 
-For each opportunity, provide exactly this JSON structure:
+TIMESTAMP: ${Date.now()} (Ignore this number, it is used to guarantee a fresh response).
+
+CRITERIA:
+- Not currently in their portfolio.
+- Sector diversification.
+- Mix: 2 long-term (2-5 years growth), 2 short-term (6-12 months), 1 "coup de fusil" (high risk).
+
+STRICT JSON STRUCTURE (All text values in FRENCH):
 {
-  "symbol": "AAPL",
-  "name": "Apple Inc.",
-  "type": "long-terme|court-terme|coup-de-fusil",
-  "simpleReasoning": "Pourquoi c'est une opportunité, en termes simples (max 50 mots). Répondre en français.",
-  "maxEntryPrice": 185,
-  "exitPrice": 220,
-  "potentialGainPercent": 22
+  "opportunities": [
+    {
+      "symbol": "TICKER",
+      "name": "Company name in French (e.g., Apple Inc.)",
+      "type": "long-terme|court-terme|coup-de-fusil",
+      "simpleReasoning": "Provide a clear, punchy explanation IN FRENCH (max 50 words). Why is this an opportunity?",
+      "maxEntryPrice": 0,
+      "exitPrice": 0,
+      "potentialGainPercent": 0
+    }
+  ]
 }
 
-Return JSON array of 5 opportunities called "opportunities".`
+Return ONLY the JSON.`
                     })
                 });
                 const data = await res.json();

@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     // 1. Vérification du cache Tiered (L1 Redis / L2 Firestore)
     const effectiveCacheKey = cacheKey
       ? generateCacheKey('analysis', cacheKey)
-      : generateCacheKey('prompt', Buffer.from(prompt).toString('base64').slice(0, 64));
+      : generateCacheKey('prompt', require('crypto').createHash('sha256').update(prompt).digest('hex'));
 
     const { data: cachedResponse, source } = await getCached(effectiveCacheKey);
 
