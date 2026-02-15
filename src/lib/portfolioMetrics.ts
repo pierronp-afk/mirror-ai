@@ -198,6 +198,7 @@ export function generateActionableAdvice(
         advice?: string;
         riskScore?: number;
         mainRisk?: string;
+        reason?: string;
         sentiment?: string;
     },
     totalPortfolioValue: number = 0
@@ -209,6 +210,9 @@ export function generateActionableAdvice(
     const totalShares = stock.shares;
     const targetWeight = 15; // Target weight if overweight
 
+    // Use AI reason or default to fallback
+    const aiReason = analysis?.mainRisk || analysis?.reason || analysis?.sentiment;
+
     // Calculate shares to sell to reach target weight
     const sharesToSell = isOverweight && totalPortfolioValue > 0
         ? Math.ceil(((portfolioWeight - targetWeight) / portfolioWeight) * totalShares)
@@ -216,36 +220,40 @@ export function generateActionableAdvice(
 
     // SELL signal + Overweight = Strong sell
     if (isSellSignal && isOverweight) {
-        const mainRisk = analysis?.mainRisk || 'risques identifiés';
-        return `🔴 Allégez fortement : Vendez ${sharesToSell} actions (${stock.symbol}) pour réduire à ~${targetWeight}% du portfolio. Raison : ${mainRisk}`;
+        const reasoning = aiReason || 'risques identifiés et surpondération';
+        return `🔴 Allégez fortement : Vendez ${sharesToSell} actions (${stock.symbol}) pour réduire à ~${targetWeight}% du portfolio. Raison : ${reasoning}`;
     }
 
     // Overweight but no sell signal = Moderate reduction
     if (isOverweight && !isSellSignal) {
         const partialSell = Math.ceil(sharesToSell / 2);
-        return `🟡 Allégez partiellement : Vendez ${partialSell} actions pour réduire la concentration. Le titre reste intéressant mais trop de risque de concentration.`;
+        const reasoning = aiReason ? `Note : ${aiReason}. ` : '';
+        return `🟡 Allégez partiellement : Vendez ${partialSell} actions pour réduire la concentration. ${reasoning}Le titre reste intéressant mais trop de risque de concentration.`;
     }
 
     // SELL signal but not overweight = Progressive exit
     if (isSellSignal && !isOverweight) {
         const progressiveSell = Math.ceil(totalShares / 3);
-        const mainRisk = analysis?.mainRisk || 'signaux négatifs';
-        return `🔴 Sortez progressivement : Vendez ${progressiveSell} actions maintenant, puis surveillez. Raison : ${mainRisk}`;
+        const reasoning = aiReason || 'signaux négatifs identifiés par l\'IA';
+        return `🔴 Sortez progressivement : Vendez ${progressiveSell} actions maintenant. Raison : ${reasoning}`;
     }
 
     // BUY signal with room to grow
     if (isBuySignal && portfolioWeight < 15) {
         const sharesToBuy = Math.floor(((20 - portfolioWeight) / 20) * totalShares);
         if (sharesToBuy > 0) {
-            return `🟢 Renforcez : Achetez ${sharesToBuy} actions supplémentaires pour porter la position à ~${(portfolioWeight + 5).toFixed(1)}% du portfolio. Opportunité confirmée par l'IA.`;
+            const reasoning = aiReason ? ` (${aiReason})` : '';
+            return `🟢 Renforcez : Achetez ${sharesToBuy} actions supplémentaires pour porter la position à ~${(portfolioWeight + 5).toFixed(1)}% du portfolio.${reasoning}`;
         }
     }
 
     // BUY signal but already well-sized
     if (isBuySignal) {
-        return `🟢 Conservez : Position bien dimensionnée (${portfolioWeight.toFixed(1)}%). Rien à faire pour l'instant.`;
+        const reasoning = aiReason ? `. Analyse : ${aiReason}` : '';
+        return `🟢 Conservez : Position bien dimensionnée (${portfolioWeight.toFixed(1)}%)${reasoning}.`;
     }
 
     // HOLD by default
-    return `⚪ Conservez : Position équilibrée (${portfolioWeight.toFixed(1)}%). Surveillez l'évolution et les actualités.`;
+    const reasoning = aiReason ? `. Note de l'IA : ${aiReason}` : '';
+    return `⚪ Conservez : Position équilibrée (${portfolioWeight.toFixed(1)}%)${reasoning}.`;
 }

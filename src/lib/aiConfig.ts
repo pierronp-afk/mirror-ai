@@ -97,34 +97,35 @@ export function buildGlobalPortfolioPrompt(
     let prompt = `${SYSTEM_PROMPT}\n\n`;
 
     if (tradingDocs && tradingDocs.length > 0) {
-        prompt += `DOCUMENTS DE RÉFÉRENCE TRADING:\n${tradingDocs.join('\n\n')}\n\n`;
+        prompt += `TRADING REFERENCE DOCUMENTS:\n${tradingDocs.join('\n\n')}\n\n`;
     }
 
-    prompt += `MISSION : Analyse technique et macro-économique de la santé globale du portefeuille.
+    prompt += `MISSION: Analyze the technical and macro-economic health of the portfolio.
     
-    CONTEXTE :
-    ${portfolioSummary}
-    
-    INSTRUCTIONS :
-    - Évalue la santé globale (health) avec un terme financier technique robuste.
-    - Analyse l'impact des actualités fournies sur la stratégie globale.
-    - Donne une prédiction de tendance à 3 mois (XX%).
-    - Propose des scénarios d'arbitrage macro (rotation sectorielle, couverture).
-    - Fournis un "Flash Actu" (newsHighlight) résumant l'événement boursier le plus impactant ici.
-    - IMPORTANT : TOUT LE CONTENU TEXTUEL DOIT ÊTRE EN FRANÇAIS.
+IMPORTANT: YOU MUST RESPOND IN FRENCH (FRANÇAIS). All string fields in the JSON response must be in clear, professional French.
 
-    RÉPONSE STRICTE JSON :
-    {
-      "health": "TERME",
-      "healthDesc": "Synthèse technique macro détaillée",
-      "prediction": "+XX%",
-      "predictionDesc": "Contexte boursier et catalyseurs",
-      "newsHighlight": "Flash info marché majeur",
-      "opportunities": [{"title": "Texte", "description": "Texte", "type": "LONG/SHORT/FUSIL"}],
-      "scenarios": [{"title": "Texte", "description": "Texte", "action": "Texte"}],
-      "balanceAdvice": "Conseil d'allocation globale",
-      "forecast": [{"date": "ISO", "value": 0}]
-    }`;
+CONTEXT:
+${portfolioSummary}
+    
+INSTRUCTIONS:
+- Evaluate global health with a robust financial term (in French).
+- Analyze the impact of provided news on global strategy.
+- Provide a 3-month trend prediction (±XX%).
+- Propose macro arbitrage scenarios (sector rotation, hedging).
+- Provide a "Flash News" (newsHighlight) summarizing the most impactful market event.
+
+STRICT JSON RESPONSE (All text fields in FRENCH):
+{
+  "health": "TECHNICAL TERM IN FRENCH",
+  "healthDesc": "Detailed macro technical synthesis in French",
+  "prediction": "+XX%",
+  "predictionDesc": "Market context and catalysts in French",
+  "newsHighlight": "Major market flash info in French",
+  "opportunities": [{"title": "Text", "description": "Text", "type": "LONG/SHORT/FUSIL"}],
+  "scenarios": [{"title": "Text", "description": "Text", "action": "Text"}],
+  "balanceAdvice": "Global allocation advice in French",
+  "forecast": [{"date": "ISO", "value": 0}]
+}`;
 
     return prompt;
 }
@@ -169,59 +170,58 @@ export function buildIndividualStockPrompt(
 ): string {
     const currentValue = shares * price;
 
-    let prompt = `Analyse ${name} (${symbol}) pour un INVESTISSEUR DÉBUTANT (PAS un trader professionnel).
+    let prompt = `Analyze ${name} (${symbol}) for a BEGINNER INVESTOR.
+    
+IMPORTANT: YOU MUST RESPOND IN FRENCH (FRANÇAIS). Even though this prompt is in English, the final user-facing content must be in clear, natural French.
 
-SITUATION ACTUELLE :
-- Action : ${name} (${symbol})
-- Prix actuel : ${price > 0 ? price + '€' : 'Non disponible (marché fermé)'}
-- Vous possédez : ${shares} actions d'une valeur de ${currentValue.toFixed(2)}€
-- Cela représente ${portfolioWeight.toFixed(1)}% de votre portefeuille total (${totalPortfolioValue.toFixed(0)}€)
-- Votre prix d'achat moyen : ${avgPrice}€`;
+CURRENT SITUATION:
+- Stock: ${name} (${symbol})
+- Current Price: ${price > 0 ? price + '€' : 'Not available (market closed)'}
+- User holds: ${shares} shares worth ${currentValue.toFixed(2)}€
+- Portfolio Weight: ${portfolioWeight.toFixed(1)}% (Total portfolio value: ${totalPortfolioValue.toFixed(0)}€)
+- Average Buy Price: ${avgPrice}€`;
 
     if (news) {
-        prompt += `\n\nACTUALITÉS RÉCENTES :\n${news}`;
+        prompt += `\n\nRECENT NEWS:\n${news}`;
     }
 
     if (ragContext) {
-        prompt += `\n\nCONTEXTE HISTORIQUE :\n${ragContext}`;
+        prompt += `\n\nHISTORICAL CONTEXT:\n${ragContext}`;
     }
 
     prompt += `
 
-INSTRUCTIONS CRITIQUES :
-1. Utilise un LANGAGE SIMPLE et CLAIR (pas de jargon comme "P/E ratio", "RSI", "MACD", "bull trap")
-2. Explique POURQUOI tu recommandes ce que tu recommandes
-3. Donne une ACTION PRÉCISE avec un NOMBRE EXACT d'actions
-4. Prends en compte le poids dans le portefeuille dans ta recommandation
-5. RÉPONDS IMPÉRATIVEMENT EN FRANÇAIS (Même si les news sont en anglais)
+CRITICAL INSTRUCTIONS:
+1. USE SIMPLE, CLEAR FRENCH (no jargon like "P/E ratio", "RSI", "MACD", "bull trap").
+2. EXPLAIN THE *REASON* (WHY) for your recommendation in simple terms.
+3. PROVIDE A PRECISE ACTION with an EXACT NUMBER of shares.
+4. TAKE PORTFOLIO WEIGHT INTO ACCOUNT. If a position is too large (>20%), even a good stock should be trimmed.
+5. QUALITY OF ADVICE: Your advice must be high-pertinence. If you recommend "HOLD" (Conserver), you MUST explain specifically what catalyst you are waiting for or why the current price is fair.
 
-RÉPONDS EN JSON STRICT :
+STRICT JSON RESPONSE (All string values must be in FRENCH):
 {
   "symbol": "${symbol}",
   "name": "${name}",
   "recommendation": "BUY|HOLD|SELL",
   "advice": "Acheter|Renforcer|Conserver|Alléger|Vendre",
   "confidence": 0-100,
-  "targetPrice": prix cible en €,
-  "stopLoss": prix stop-loss en €,
-  "simpleReasoning": "Explique en 2-3 phrases SIMPLES POURQUOI cette recommandation. Utilise un langage de tous les jours.",
-  "mainRisk": "Le SEUL plus gros risque en termes simples",
-  "action": "Action EXACTE à prendre avec des chiffres. Exemples : 'Vendez 20 actions', 'Achetez 10 actions supplémentaires', 'Conservez vos ${shares} actions'",
-  "actionReasoning": "Pourquoi ce nombre précis d'actions",
+  "targetPrice": target price in €,
+  "stopLoss": stop-loss price in €,
+  "simpleReasoning": "Explain in 2-3 SIMPLE sentences WHY this recommendation. Use everyday French. Be specific and pertinent.",
+  "mainRisk": "The single biggest risk in simple French terms",
+  "action": "EXACT action in French with numbers. Examples: 'Vendez 20 actions', 'Achetez 10 actions supplémentaires', 'Conservez vos ${shares} actions'",
+  "actionReasoning": "Why this specific number of shares (in French)",
   "urgency": "HAUTE|MODÉRÉE|FAIBLE",
   "color": "rose|emerald|blue",
-  "rsi": estimation RSI 0-100 (pour usage interne uniquement),
+  "rsi": estimated RSI 0-100 (internal use),
   "sentiment": "BULLISH|BEARISH|NEUTRAL",
-  "idealWeight": poids idéal suggéré en % (max 20%)
+  "idealWeight": suggested weight % (max 20%)
 }
 
-EXEMPLE de BON raisonnement simple :
+EXAMPLE of GOOD simple reasoning:
 "Meta gagne à nouveau de l'argent grâce à la publicité qui repart. Le titre a monté de 20% cette année. Mais attention : vous avez 25% de votre argent sur ce seul titre, c'est risqué."
 
-EXEMPLE de MAUVAIS raisonnement technique (À ÉVITER) :
-"Meta shows bullish momentum with RSI at 65, MACD crossover positive, and P/E ratio of 28x forward earnings below sector average."
-
-RAPPEL : Ton audience est un DÉBUTANT. Parle-lui comme à un ami, pas comme à un trader de Wall Street.`;
+REMINDER: Your audience is a BEGINNER. Talk to them like a friend, not a Wall Street trader. ALL TEXT MUST BE IN FRENCH.`;
 
     return prompt;
 }

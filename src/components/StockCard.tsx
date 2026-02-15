@@ -371,6 +371,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                         advice: aiSignal?.advice,
                                         riskScore: aiSignal?.rsi,
                                         mainRisk: aiSignal?.justification?.split('.')[0] || 'Surveiller l\'évolution',
+                                        reason: aiSignal?.reason,
                                         sentiment: aiSignal?.sentiment?.toString()
                                     },
                                     portfolioTotalValue

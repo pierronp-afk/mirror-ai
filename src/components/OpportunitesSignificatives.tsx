@@ -24,18 +24,20 @@ export function OpportunitesSignificatives() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt: `Identify 5 investment opportunities for a beginner investor.
+                        
+IMPORTANT: ALL text fields in the JSON response (name, simpleReasoning) MUST be written in FRENCH (FRANÇAIS), even if the symbol is for a US stock.
 
 Criteria:
 - NOT already in their portfolio
 - Diversification with their current holdings
 - Mix of: 2 long-term (growth over 2-5 years), 2 short-term (6-12 months), 1 "coup de fusil" (high risk/high reward)
 
-For each opportunity, provide:
+For each opportunity, provide exactly this JSON structure:
 {
   "symbol": "AAPL",
   "name": "Apple Inc.",
   "type": "long-terme|court-terme|coup-de-fusil",
-  "simpleReasoning": "Why this is an opportunity in simple terms (max 50 words)",
+  "simpleReasoning": "Pourquoi c'est une opportunité, en termes simples (max 50 mots). Répondre en français.",
   "maxEntryPrice": 185,
   "exitPrice": 220,
   "potentialGainPercent": 22
