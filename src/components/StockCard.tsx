@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Stock, AISignal } from '@/types';
 import { TrendingUp, TrendingDown, Info, ShieldCheck, AlertTriangle, Trash2, RefreshCw, Edit2, Check, X, Sparkles } from 'lucide-react';
+import { getStockSector, calculateSectorWeights, generateActionableAdvice } from '@/lib/portfolioMetrics';
 
 interface StockCardProps {
     stock: Stock;
@@ -9,12 +10,14 @@ interface StockCardProps {
     exchangeRate?: number; // Rate to convert Native -> Display
     displayCurrency?: string; // e.g. 'EUR', 'USD'
     portfolioTotalValue?: number; // Total portfolio value for weight calculation
+    allStocks?: Stock[]; // All portfolio stocks for sector comparison
+    allMarketPrices?: Record<string, { price: number; change: number; changePercent: number }>; // All market prices
     onRemove: (symbol: string) => void;
     onRefresh?: (symbol: string) => void;
     onUpdateStock?: (symbol: string, shares: number, avgPrice: number) => void;
 }
 
-export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1, displayCurrency = 'EUR', portfolioTotalValue = 0, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
+export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 1, displayCurrency = 'EUR', portfolioTotalValue = 0, allStocks = [], allMarketPrices = {}, onRemove, onRefresh, onUpdateStock }: StockCardProps) {
     const [flipped, setFlipped] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -164,13 +167,7 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                             </div>
                         </div>
 
-                        {/* Portfolio Weight Badge */}
-                        {portfolioTotalValue > 0 && (
-                            <div className={`px-3 py-1.5 rounded-full text-xs font-bold border ${getWeightColor()} flex items-center gap-1.5`}>
-                                <span>{portfolioWeight.toFixed(1)}%</span>
-                                {isOverweight && <AlertTriangle size={12} />}
-                            </div>
-                        )}
+
 
                         {/* Remove Button */}
                         {onRemove && (
@@ -330,39 +327,54 @@ export default function StockCard({ stock, marketData, aiSignal, exchangeRate = 
                                 <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] italic leading-none">Analyse Cockpit</h4>
                             </div>
                         </div>
-                        {/* KPIs */}
+                        {/* KPIs - REAL CALCULATIONS */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Poids Actuel</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-black text-white">{aiSignal?.weight || '---'}%</span>
+                                <div className="flex flex-col">
+                                    <span className="text-2xl font-black text-white">{portfolioWeight.toFixed(1)}%</span>
+                                    {isOverweight && (
+                                        <span className="text-[9px] text-orange-400 mt-1">⚠️ Concentration</span>
+                                    )}
                                 </div>
                             </div>
                             <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-1">
                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Vs Secteur</span>
-                                <span className={`text-sm font-black ${aiSignal?.sectorPerf && aiSignal.sectorPerf > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {aiSignal?.sectorPerf ? `${aiSignal.sectorPerf > 0 ? '+' : ''}${aiSignal.sectorPerf}%` : '---'}
-                                </span>
+                                {(() => {
+                                    const sectorWeights = calculateSectorWeights(allStocks, allMarketPrices, exchangeRate);
+                                    const stockSector = getStockSector(stock.symbol);
+                                    const sectorAvg = sectorWeights[stockSector]?.avg || 0;
+                                    const vsSector = portfolioWeight - sectorAvg;
+                                    return (
+                                        <>
+                                            <span className={`text-2xl font-black ${vsSector > 0 ? 'text-emerald-400' : vsSector < 0 ? 'text-rose-400' : 'text-white'}`}>
+                                                {vsSector > 0 ? '+' : ''}{vsSector.toFixed(1)}%
+                                            </span>
+                                            <span className="text-[9px] text-slate-400 mt-1">
+                                                {vsSector > 5 ? 'Surpondéré' : vsSector < -5 ? 'Sous-pondéré' : 'Équilibré'}
+                                            </span>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
 
+                        {/* ACTIONABLE ADVICE */}
                         <div className="relative p-5 md:p-6 bg-blue-600/5 rounded-[2.5rem] border border-blue-500/20">
-                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Stratégie Mirror AI</p>
-                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                <div className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest ${adviceColor === 'rose' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                    Signal: {adviceText}
-                                </div>
-                                {aiSignal?.rsi && (
-                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
-                                        <span className="text-[8px] font-bold text-slate-500 uppercase">RSI</span>
-                                        <span className={`text-[10px] font-black ${aiSignal.rsi > 70 ? 'text-rose-400' : 'text-blue-400'}`}>{aiSignal.rsi}</span>
-                                    </div>
+                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">💡 Conseil Mirror AI</p>
+                            <div className="text-xs text-slate-200 leading-relaxed">
+                                {generateActionableAdvice(
+                                    { ...stock, currentValue: totalValue },
+                                    portfolioWeight,
+                                    {
+                                        recommendation: aiSignal?.rec,
+                                        advice: aiSignal?.advice,
+                                        riskScore: aiSignal?.rsi,
+                                        mainRisk: aiSignal?.justification?.split('.')[0] || 'Surveiller l\'évolution',
+                                        sentiment: aiSignal?.sentiment?.toString()
+                                    },
+                                    portfolioTotalValue
                                 )}
-                            </div>
-                            <div className="space-y-2 mb-6 border-l-2 border-blue-500/20 pl-4">
-                                {aiSignal?.justification?.split('.').slice(0, 3).map((point, i) => point.trim() && (
-                                    <p key={i} className="text-xs text-slate-300 leading-tight">{point.trim()}</p>
-                                ))}
                             </div>
                         </div>
                     </div>

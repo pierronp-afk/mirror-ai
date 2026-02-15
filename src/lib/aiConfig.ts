@@ -111,6 +111,7 @@ export function buildGlobalPortfolioPrompt(
     - Donne une prédiction de tendance à 3 mois (XX%).
     - Propose des scénarios d'arbitrage macro (rotation sectorielle, couverture).
     - Fournis un "Flash Actu" (newsHighlight) résumant l'événement boursier le plus impactant ici.
+    - IMPORTANT : TOUT LE CONTENU TEXTUEL DOIT ÊTRE EN FRANÇAIS.
 
     RÉPONSE STRICTE JSON :
     {
@@ -153,7 +154,7 @@ export function buildQuestionPrompt(
 }
 
 /**
- * Génère un prompt pour l'analyse d'un SEUL titre (Micro)
+ * Génère un prompt pour l'analyse d'un SEUL titre (Micro) - VERSION VULGARISÉE
  */
 export function buildIndividualStockPrompt(
     symbol: string,
@@ -161,57 +162,67 @@ export function buildIndividualStockPrompt(
     price: number,
     shares: number,
     avgPrice: number,
+    portfolioWeight: number = 0,
+    totalPortfolioValue: number = 0,
     news?: string,
     ragContext?: string
 ): string {
-    let prompt = `${SYSTEM_PROMPT}
+    const currentValue = shares * price;
 
-MISSION : Analyse AUDIT FINANCIER du titre ${name} (${symbol}).
-DONNÉES : 
-- Position : ${shares} titres détenus à un PRU de ${avgPrice}€.
-- Marché : Prix actuel à ${price > 0 ? price + '€' : 'Non disponible (marché fermé)'}.`;
+    let prompt = `Analyse ${name} (${symbol}) pour un INVESTISSEUR DÉBUTANT (PAS un trader professionnel).
+
+SITUATION ACTUELLE :
+- Action : ${name} (${symbol})
+- Prix actuel : ${price > 0 ? price + '€' : 'Non disponible (marché fermé)'}
+- Vous possédez : ${shares} actions d'une valeur de ${currentValue.toFixed(2)}€
+- Cela représente ${portfolioWeight.toFixed(1)}% de votre portefeuille total (${totalPortfolioValue.toFixed(0)}€)
+- Votre prix d'achat moyen : ${avgPrice}€`;
 
     if (news) {
-        prompt += `\n\nCONTEXTE ACTUALITÉS RÉCENTES (TEMP RÉEL) :\n${news}`;
+        prompt += `\n\nACTUALITÉS RÉCENTES :\n${news}`;
     }
 
     if (ragContext) {
-        prompt += `\n\nACTUALITÉS ARCHIVÉES & CONTEXTE HISTORIQUE (RAG) :\n${ragContext}`;
+        prompt += `\n\nCONTEXTE HISTORIQUE :\n${ragContext}`;
     }
 
     prompt += `
 
-INSTRUCTIONS ANALYTIQUES :
-1. ANALYSE TECHNIQUE : Estime le RSI actuel et identifie un Support et une Résistance clés basés sur le contexte news/prix.
-2. ANALYSE FONDAMENTALE : Évalue la pertinence du titre dans le contexte sectoriel actuel cité dans les actualités.
-3. SENTIMENT : Analyse les actualités fournies et classe le sentiment global (BULLISH/BEARISH/NEUTRAL) avec un score de -1.0 à 1.0.
-4. STRATÉGIE DE SORTIE : Calcule un Objectif (Target Price) et un Stop-Loss (Protection de capital) mathématiquement cohérents avec la volatilité suggérée.
-5. DÉCISION : Choisis entre Vendre, Alléger, Conserver, Renforcer ou Acheter. Justifie avec un argument "Killer" (le point le plus critique).
+INSTRUCTIONS CRITIQUES :
+1. Utilise un LANGAGE SIMPLE et CLAIR (pas de jargon comme "P/E ratio", "RSI", "MACD", "bull trap")
+2. Explique POURQUOI tu recommandes ce que tu recommandes
+3. Donne une ACTION PRÉCISE avec un NOMBRE EXACT d'actions
+4. Prends en compte le poids dans le portefeuille dans ta recommandation
+5. RÉPONDS IMPÉRATIVEMENT EN FRANÇAIS (Même si les news sont en anglais)
 
-RECOMMANDATION DE POIDS :
-- Suggère l'IdealWeight (en % du portefeuille global, max 20%) pour équilibrer le risque.
-
-RÉPONSE STRICTE JSON :
+RÉPONDS EN JSON STRICT :
 {
   "symbol": "${symbol}",
   "name": "${name}",
-  "rec": "DÉCISION COURTE EX: RENFORCER",
-  "advice": "Vendre/Alléger/Conserver/Renforcer/Acheter",
-  "justification": "Argument financier dense et technique expliquant la décision",
-  "threeMonthOutlook": "Scénario prédictif à 90 jours basé sur les catalyseurs identifiés",
-  "urgency": "HAUTE/MODÉREE/FAIBLE",
-  "color": "rose/emerald/blue",
-  "targetPrice": 0,
-  "stopLoss": 0,
-  "rsi": 0,
-  "sentiment": "BULLISH/BEARISH/NEUTRAL",
-  "sentimentScore": 0,
-  "idealWeight": 0,
-  "scenarioSuggestion": {
-    "action": "Action concrète immédiate (ex: Placer un ordre limite à X€)",
-    "impact": "Conséquence directe sur le risque ou le rendement"
-  }
-}`;
+  "recommendation": "BUY|HOLD|SELL",
+  "advice": "Acheter|Renforcer|Conserver|Alléger|Vendre",
+  "confidence": 0-100,
+  "targetPrice": prix cible en €,
+  "stopLoss": prix stop-loss en €,
+  "simpleReasoning": "Explique en 2-3 phrases SIMPLES POURQUOI cette recommandation. Utilise un langage de tous les jours.",
+  "mainRisk": "Le SEUL plus gros risque en termes simples",
+  "action": "Action EXACTE à prendre avec des chiffres. Exemples : 'Vendez 20 actions', 'Achetez 10 actions supplémentaires', 'Conservez vos ${shares} actions'",
+  "actionReasoning": "Pourquoi ce nombre précis d'actions",
+  "urgency": "HAUTE|MODÉRÉE|FAIBLE",
+  "color": "rose|emerald|blue",
+  "rsi": estimation RSI 0-100 (pour usage interne uniquement),
+  "sentiment": "BULLISH|BEARISH|NEUTRAL",
+  "idealWeight": poids idéal suggéré en % (max 20%)
+}
+
+EXEMPLE de BON raisonnement simple :
+"Meta gagne à nouveau de l'argent grâce à la publicité qui repart. Le titre a monté de 20% cette année. Mais attention : vous avez 25% de votre argent sur ce seul titre, c'est risqué."
+
+EXEMPLE de MAUVAIS raisonnement technique (À ÉVITER) :
+"Meta shows bullish momentum with RSI at 65, MACD crossover positive, and P/E ratio of 28x forward earnings below sector average."
+
+RAPPEL : Ton audience est un DÉBUTANT. Parle-lui comme à un ami, pas comme à un trader de Wall Street.`;
+
     return prompt;
 }
 

@@ -71,7 +71,12 @@ export function useAI() {
     }
   };
 
-  const analyzeStock = async (stock: Stock, marketPrice: number): Promise<any> => {
+  const analyzeStock = async (
+    stock: Stock,
+    marketPrice: number,
+    portfolioWeight: number = 0,
+    totalPortfolioValue: number = 0
+  ): Promise<any> => {
     try {
       // 1. Enrichissement News (On garde l'extraction mais on ne fait plus de requête IA séparée pour le sentiment)
       let newsContext = "";
@@ -92,6 +97,8 @@ export function useAI() {
         marketPrice,
         stock.shares,
         stock.avgPrice,
+        portfolioWeight,
+        totalPortfolioValue,
         newsContext
       );
 

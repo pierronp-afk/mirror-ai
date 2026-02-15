@@ -21,6 +21,9 @@ import {
   AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 import StockCard from '@/components/StockCard';
+import AuditMirrorAI from '@/components/AuditMirrorAI';
+import { FlashActuMarche } from '@/components/FlashActuMarche';
+import { OpportunitesSignificatives } from '@/components/OpportunitesSignificatives';
 
 // Les interfaces & types sont maintenant importés depuis @/types
 
@@ -452,80 +455,107 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* KPI DASHBOARD */}
-        <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-xl shadow-slate-200/40 border border-white relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform duration-700">
-              <Activity size={180} />
+        {/* FLASH ACTU MARCHÉ */}
+        <FlashActuMarche />
+
+        {/* KPI DASHBOARD - NEW 4 CAPSULES */}
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {/* Capsule 1: Valeur Totale */}
+          <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/40 border border-white relative overflow-hidden group hover:shadow-2xl transition-all">
+            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-700">
+              <Activity size={100} />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2 italic">Valeur Totale du Portefeuille</p>
-            <div className="flex flex-col gap-2">
-              <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-slate-900 leading-none">
-                {totalValue.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency })}
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 italic">Portfolio</p>
+            <div className="flex flex-col gap-1 relative z-10">
+              <h2 className="text-3xl font-black tracking-tighter text-slate-900 leading-none">
+                {totalValue.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency, maximumFractionDigits: 0 })}
               </h2>
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center gap-1 text-lg font-bold ${totalGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {totalGain >= 0 ? '+' : ''}{totalGain.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency })}
-                </div>
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${totalGain >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                  {totalGain >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              <div className={`flex items-center gap-1 text-sm font-bold ${totalGain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {totalGain >= 0 ? '+' : ''}{totalGain.toLocaleString('fr-FR', { style: 'currency', currency: displayCurrency, maximumFractionDigits: 0 })}
+                <span className={`ml-2 px-2 py-0.5 rounded-lg text-[10px] ${totalGain >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
                   {totalGain >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
-                </div>
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-[3rem] p-8 shadow-xl shadow-slate-200/40 border border-white flex flex-col justify-between group">
-            <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 italic">Top Performance</p>
-            {performanceStats ? (
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-2xl font-black tracking-tighter text-slate-900">{performanceStats.best.symbol}</h4>
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                    <ArrowUpRight size={20} />
+          {/* Capsule 2: Top Performance */}
+          <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/40 border border-white flex flex-col justify-between group hover:shadow-2xl transition-all">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic mb-2">Top Performer</p>
+              {performanceStats ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xl font-black tracking-tighter text-slate-900">{performanceStats.best.symbol}</h4>
+                    <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                      <ArrowUpRight size={16} />
+                    </div>
                   </div>
-                </div>
-                <p className="text-3xl font-black text-emerald-500">+{performanceStats.maxGain.toFixed(1)}%</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">{performanceStats.best.name}</p>
-              </div>
-            ) : (
-              <p className="text-slate-300 font-bold italic">Aucune donnée</p>
-            )}
+                  <p className="text-2xl font-black text-emerald-500 mt-1">+{performanceStats.maxGain.toFixed(1)}%</p>
+                </>
+              ) : (
+                <div className="h-full flex items-center text-slate-300 font-bold italic text-sm">---</div>
+              )}
+            </div>
           </div>
 
+          {/* Capsule 3: Audit CTA */}
           <button
             onClick={async () => {
               setShowAIModal(true);
               // 1. Analyse Macro
               await analyzePortfolio(stocks, effectiveMarketPrices);
 
-              // Fonction utilitaire pour le délai
+              // 2. Utilisé un délai pour les analyses micro si besoin, 
+              // mais pour l'audit global, on a déjà un health score approximatif via le macro ou analyse rapide
+              // On lance quand même le détail pour les actions
               const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-              // 2. Analyses Micro (Séquentielles pour préserver les quotas API)
               for (const s of stocks) {
                 const price = effectiveMarketPrices[s.symbol]?.price || s.avgPrice;
-                const isUS = !s.symbol.includes('.');
-                const priceEur = isUS ? (price / eurUsdRate) : price;
+                const rate = getConversionRate(s.symbol);
+                const convertedPrice = price * rate;
+                const stockValue = s.shares * convertedPrice;
+                const weight = totalValue > 0 ? (stockValue / totalValue) * 100 : 0;
 
                 try {
-                  await analyzeStock(s, priceEur);
-                  // On attend 3 secondes entre chaque titre pour respecter la limite RPM
-                  await delay(3500);
+                  await analyzeStock(s, price, weight, totalValue);
+                  await delay(2000); // Délai réduit à 2s pour fluidifier un peu
                 } catch (err) {
-                  console.error(`Erreur quota pour ${s.symbol}:`, err);
-                  await delay(5000); // Pause plus longue en cas d'échec
+                  console.error(err);
                 }
               }
             }}
-            className="bg-slate-900 rounded-[3rem] p-10 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
+            className="bg-slate-900 rounded-[2.5rem] p-8 flex flex-col justify-between items-start text-left hover:bg-blue-600 transition-all duration-500 group overflow-hidden relative shadow-2xl shadow-slate-900/20"
           >
-            <div className="bg-white/10 p-4 rounded-2xl group-hover:scale-110 transition-transform">
-              <Sparkles className="text-blue-400 w-8 h-8" />
+            <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:scale-110 transition-transform">
+              <Sparkles size={80} className="text-white" />
             </div>
-            <div className="relative z-10">
-              <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Lancer l&apos;audit <br /> Mirror AI</h3>
-              <p className="text-slate-400 group-hover:text-blue-100 text-xs mt-2 font-medium">Analyse prédictive et conseils stratégiques.</p>
+            <div className="relative z-10 w-full h-full flex flex-col justify-between">
+              <div className="bg-white/10 p-3 rounded-2xl w-fit mb-4">
+                <Sparkles className="text-blue-400 w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-white text-xl font-black uppercase italic tracking-tighter leading-tight">Lancer<br />Audit</h3>
+                <p className="text-slate-400 group-hover:text-blue-100 text-[10px] mt-1 font-medium">Analyse IA</p>
+              </div>
+            </div>
+          </button>
+
+          {/* Capsule 4: Découverte (Anchor to Opportunities) */}
+          <button
+            onClick={() => document.getElementById('opportunities')?.scrollIntoView({ behavior: 'smooth' })}
+            className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/40 border border-white flex flex-col justify-between group hover:shadow-2xl transition-all"
+          >
+            <div className="w-full flex justify-between items-start">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic">Opportunités</p>
+              <div className="bg-purple-50 text-purple-600 p-2 rounded-xl group-hover:bg-purple-100 transition-colors">
+                <Target size={20} />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 mt-2">Découvrir</h2>
+              <p className="text-[10px] text-slate-400 font-bold mt-1">Signaux IA &rarr;</p>
             </div>
           </button>
         </section>
@@ -542,8 +572,14 @@ export default function Dashboard() {
           </div>
 
           {/* GRAPHIQUE DE PILOTAGE */}
+          {/* GRAPHIQUE DE PILOTAGE */}
           <div className="w-full">
             <PortfolioChart forecast={analysis?.forecast} currentValue={totalValue} />
+          </div>
+
+          {/* OPPORTUNITES SECTION */}
+          <div id="opportunities" className="w-full">
+            <OpportunitesSignificatives />
           </div>
         </section>
 
@@ -621,6 +657,8 @@ export default function Dashboard() {
                   exchangeRate={getConversionRate(stock.symbol)}
                   displayCurrency={displayCurrency}
                   portfolioTotalValue={totalValue}
+                  allStocks={stocks}
+                  allMarketPrices={effectiveMarketPrices}
                   onRemove={handleRemoveStock}
                   onUpdateStock={updateStock}
                   onRefresh={async (symbol) => {
@@ -663,9 +701,11 @@ export default function Dashboard() {
 
                         // 3. Analyse IA spécifique
                         if (marketData && analyzeStock) {
-                          const isUS = !currentStock.symbol.includes('.');
-                          const priceEur = isUS ? (marketData.c / eurUsdRate) : marketData.c;
-                          await analyzeStock(currentStock, priceEur);
+                          const rate = getConversionRate(currentStock.symbol);
+                          const convertedPrice = marketData.c * rate;
+                          const stockValue = currentStock.shares * convertedPrice;
+                          const weight = totalValue > 0 ? (stockValue / totalValue) * 100 : 0;
+                          await analyzeStock(currentStock, marketData.c, weight, totalValue);
                         }
                       }
                     } catch (err) {
@@ -676,158 +716,18 @@ export default function Dashboard() {
               ))}
           </div>
 
-          {/* OPPORTUNITÉS */}
-          {/* OPPORTUNITÉS */}
-          {analysis?.opportunities && analysis.opportunities.length > 0 ? (
-            <OpportunitiesSection opportunities={analysis.opportunities} />
-          ) : (
-            <div className="mt-20 text-center border-2 border-dashed border-slate-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center gap-4 opacity-50">
-              <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Module Opportunités en attente</p>
-              <button
-                onClick={() => setShowAIModal(true)}
-                className="flex items-center gap-2 text-blue-500 font-black uppercase text-[10px] tracking-widest hover:text-blue-600 transition-colors"
-              >
-                <Sparkles size={14} /> Lancer l'audit pour détecter des opportunités
-              </button>
-            </div>
-          )}
+
         </section>
       </main>
 
       {/* MODAL IA AVEC FLIP CARDS */}
       {showAIModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 backdrop-blur-xl bg-slate-900/60 overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl min-h-[70vh] max-h-[90vh] rounded-[2.5rem] md:rounded-[4rem] shadow-2xl overflow-hidden flex flex-col relative my-auto animate-in zoom-in duration-300 text-slate-900">
-            <div className="p-8 md:p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
-                  <Sparkles className="text-white w-6 h-6 animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900">Audit Mirror AI</h3>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Veille stratégique &amp; Diagnostics</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAIModal(false)}
-                className="p-3 bg-white rounded-full text-slate-400 hover:text-slate-900 transition-all shadow-sm"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-12">
-              <div className="bg-blue-600/5 border border-blue-600/10 rounded-[2rem] p-6 mb-8 flex flex-col gap-4">
-                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic">Poser une question à Mirror AI</p>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Ex: Quelles opportunités sur le secteur de la tech ?"
-                    className="flex-1 bg-white border border-slate-200 rounded-2xl px-6 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-slate-800"
-                    onKeyDown={async (e) => {
-                      if (e.key === 'Enter' && question.trim() && !isAsking) {
-                        setIsAsking(true);
-                        const ans = await askQuestion(question);
-                        setChatHistory(prev => [{ q: question, a: ans }, ...prev]);
-                        setQuestion("");
-                        setIsAsking(false);
-                      }
-                    }}
-                  />
-                  <button
-                    disabled={isAsking || !question.trim()}
-                    onClick={async () => {
-                      setIsAsking(true);
-                      const ans = await askQuestion(question);
-                      setChatHistory(prev => [{ q: question, a: ans }, ...prev]);
-                      setQuestion("");
-                      setIsAsking(false);
-                    }}
-                    className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors disabled:opacity-50"
-                  >
-                    {isAsking ? "..." : "Interroger"}
-                  </button>
-                </div>
-
-                {chatHistory.length > 0 && (
-                  <div className="mt-4 space-y-4 max-h-60 overflow-y-auto pr-2">
-                    {chatHistory.map((chat, i) => (
-                      <div key={i} className="bg-white/50 border border-slate-100 rounded-2xl p-4">
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Q: {chat.q}</p>
-                        <p className="text-xs text-slate-700 leading-relaxed italic">&quot;{chat.a}&quot;</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {isAnalyzing ? (
-                <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                  <p className="font-black text-slate-400 text-[10px] uppercase tracking-widest animate-pulse">Analyse des flux boursiers...</p>
-                </div>
-              ) : analysis ? (
-                <>
-                  {/* RÉSUMÉ IA */}
-                  <div className="bg-slate-900 rounded-[3rem] p-10 md:p-12 text-white relative overflow-hidden shadow-2xl">
-                    <div className="absolute top-0 right-0 p-10 opacity-5 rotate-12 text-white">
-                      <BrainCircuit size={150} />
-                    </div>
-                    <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-10">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400 mb-4 italic">Diagnostic Global</p>
-                        <h4 className="text-4xl md:text-5xl font-black uppercase italic mb-4">{analysis.health}</h4>
-                        <p className="text-slate-400 text-base leading-relaxed">{analysis.healthDesc}</p>
-                      </div>
-                      <div className="bg-white/5 backdrop-blur-md rounded-[2rem] p-8 border border-white/10 flex flex-col justify-center">
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400 mb-2 italic">Projection à 3 mois</p>
-                        <p className="text-4xl md:text-5xl font-black text-white tracking-tighter">{analysis.prediction}</p>
-                        <p className="text-xs text-slate-400 italic mt-4">&quot;{analysis.predictionDesc}&quot;</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* FLASH ACTU */}
-                  <div className="bg-blue-50 border border-blue-100 rounded-[2rem] p-6 flex items-center gap-6">
-                    <div className="bg-blue-600 text-white p-3 rounded-xl shadow-lg">
-                      <Bell size={20} className="animate-bounce" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1 italic">Flash Actu Marché</p>
-                      <p className="font-bold text-slate-900 text-sm">{analysis.newsHighlight}</p>
-                    </div>
-                  </div>
-
-                  {/* SIGNALS FLIP CARDS */}
-                  <div className="space-y-8">
-                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic px-2">Recommandations & Opportunités</h5>
-                    <div className="grid grid-cols-1 gap-8">
-                      {analysis.signals.map((item, i) => (
-                        <RecommendationCard key={i} item={item} />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center p-20 bg-rose-50 rounded-[3rem] border border-rose-100">
-                  <AlertCircle className="mx-auto text-rose-500 w-12 h-12 mb-4" />
-                  <p className="text-rose-900 font-bold">{aiError || "Une erreur est survenue lors de l&apos;analyse."}</p>
-                  <button onClick={() => analyzePortfolio(stocks, effectiveMarketPrices)} className="mt-6 text-rose-600 font-black uppercase text-[10px] tracking-widest border-b-2 border-rose-200">Réessayer l&apos;analyse</button>
-                </div>
-              )}
-            </div>
-
-            <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row gap-4 justify-between items-center text-slate-400">
-              <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-emerald-500" /> Intelligence artificielle Gemini 1.5 Flash
-              </p>
-              <button onClick={() => setShowAIModal(false)} className="text-[10px] font-black uppercase tracking-[0.3em] hover:text-slate-900 transition-all">
-                Fermer l&apos;audit
-              </button>
-            </div>
-          </div>
-        </div>
+        <AuditMirrorAI
+          portfolio={stocks}
+          signals={analysis?.signals || []}
+          totalValue={totalValue}
+          onClose={() => setShowAIModal(false)}
+        />
       )}
 
       {/* MODAL AJOUT D'ACTION */}
@@ -838,54 +738,6 @@ export default function Dashboard() {
           exchangeRate={eurUsdRate}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * --- COMPOSANT : CARTE RETOURNABLE (RECOMMENDATION CARD) ---
- */
-function RecommendationCard({ item }: { item: AISignal }) {
-  const [flipped, setFlipped] = useState(false);
-
-  return (
-    <div className="relative h-72 md:h-64 w-full cursor-pointer perspective-1000" onClick={() => setFlipped(!flipped)}>
-      <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
-
-        {/* FACE AVANT (Résumé) */}
-        <div className="absolute inset-0 backface-hidden bg-white border border-slate-100 rounded-[2.5rem] p-8 md:p-10 shadow-xl flex flex-col justify-between hover:border-blue-400 transition-colors">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="font-black text-3xl italic uppercase tracking-tighter text-slate-900">{item.name}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">{item.reason}</p>
-            </div>
-            <div className="bg-blue-50 text-blue-600 p-2 rounded-xl">
-              <Info size={20} />
-            </div>
-          </div>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <span className={`px-8 py-4 font-black text-[10px] rounded-2xl uppercase tracking-widest border shadow-lg ${item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-              (item.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100')
-              }`}>
-              {item.rec}
-            </span>
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">Urgence : {item.urgency}</span>
-          </div>
-        </div>
-
-        {/* FACE ARRIÈRE (Justification détaillée) */}
-        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 rounded-[2.5rem] p-8 md:p-12 flex flex-col justify-center border-2 border-blue-500 shadow-2xl shadow-blue-500/20 text-white">
-          <h5 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-6 italic">Justification Mirror AI</h5>
-          <p className="text-base md:text-xl font-medium leading-relaxed italic text-slate-200">
-            &quot;{item.justification || item.reason}&quot;
-          </p>
-          <div className="mt-8 flex items-center gap-3 text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
-            <div className="w-10 h-px bg-blue-900"></div>
-            Analyse sectorielle temps réel
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }

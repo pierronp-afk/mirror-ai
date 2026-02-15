@@ -82,3 +82,170 @@ export function getConcentrationRiskMessage(weight: number, symbol: string): str
     }
     return null;
 }
+
+/**
+ * Map stock symbols to their sectors
+ */
+export function getStockSector(symbol: string): string {
+    const sectorMap: Record<string, string> = {
+        // Tech
+        'AAPL': 'Tech',
+        'MSFT': 'Tech',
+        'GOOG': 'Tech',
+        'GOOGL': 'Tech',
+        'META': 'Tech',
+        'NVDA': 'Tech',
+        'AMZN': 'Tech',
+        'TSLA': 'Tech',
+        'NFLX': 'Tech',
+        'ASML.AS': 'Tech',
+        'SAP.DE': 'Tech',
+
+        // Luxury
+        'MC.PA': 'Luxe',
+        'OR.PA': 'Luxe',
+        'RMS.PA': 'Luxe',
+        'KER.PA': 'Luxe',
+
+        // Energy
+        'SHEL.L': 'Énergie',
+        'BP.L': 'Énergie',
+        'TTE.PA': 'Énergie',
+        'XOM': 'Énergie',
+        'CVX': 'Énergie',
+
+        // Finance
+        'JPM': 'Finance',
+        'BAC': 'Finance',
+        'GS': 'Finance',
+        'BNP.PA': 'Finance',
+        'ACA.PA': 'Finance',
+
+        // Consumer
+        'NESN.SW': 'Consommation',
+        'PG': 'Consommation',
+        'KO': 'Consommation',
+        'PEP': 'Consommation',
+
+        // Auto
+        '7203.T': 'Automobile',
+        'F': 'Automobile',
+        'GM': 'Automobile',
+
+        // Other
+        '0700.HK': 'Tech',
+    };
+
+    return sectorMap[symbol.toUpperCase()] || 'Autre';
+}
+
+/**
+ * Calculate sector weights across the portfolio
+ */
+export function calculateSectorWeights(
+    stocks: Stock[],
+    marketPrices: Record<string, MarketData>,
+    exchangeRate: number = 1
+): Record<string, { total: number; avg: number; count: number }> {
+    const sectorData: Record<string, { total: number; count: number }> = {};
+
+    let totalPortfolioValue = 0;
+
+    // First pass: calculate total portfolio value
+    stocks.forEach(stock => {
+        const marketPrice = marketPrices[stock.symbol]?.price || stock.avgPrice;
+        const convertedPrice = marketPrice * exchangeRate;
+        totalPortfolioValue += stock.shares * convertedPrice;
+    });
+
+    // Second pass: calculate sector weights
+    stocks.forEach(stock => {
+        const sector = getStockSector(stock.symbol);
+        const marketPrice = marketPrices[stock.symbol]?.price || stock.avgPrice;
+        const convertedPrice = marketPrice * exchangeRate;
+        const stockValue = stock.shares * convertedPrice;
+        const weight = totalPortfolioValue > 0 ? (stockValue / totalPortfolioValue) * 100 : 0;
+
+        if (!sectorData[sector]) {
+            sectorData[sector] = { total: 0, count: 0 };
+        }
+
+        sectorData[sector].total += weight;
+        sectorData[sector].count += 1;
+    });
+
+    // Calculate averages
+    const result: Record<string, { total: number; avg: number; count: number }> = {};
+    Object.keys(sectorData).forEach(sector => {
+        result[sector] = {
+            total: sectorData[sector].total,
+            avg: sectorData[sector].total / sectorData[sector].count,
+            count: sectorData[sector].count
+        };
+    });
+
+    return result;
+}
+
+/**
+ * Generate actionable advice with precise share counts
+ */
+export function generateActionableAdvice(
+    stock: Stock & { symbol: string; shares: number; currentValue?: number },
+    portfolioWeight: number,
+    analysis?: {
+        recommendation?: string;
+        advice?: string;
+        riskScore?: number;
+        mainRisk?: string;
+        sentiment?: string;
+    },
+    totalPortfolioValue: number = 0
+): string {
+    const isOverweight = portfolioWeight > 20;
+    const isSellSignal = analysis?.recommendation === 'SELL' || analysis?.advice === 'Vendre';
+    const isBuySignal = analysis?.recommendation === 'BUY' || analysis?.advice === 'Acheter' || analysis?.advice === 'Renforcer';
+
+    const totalShares = stock.shares;
+    const targetWeight = 15; // Target weight if overweight
+
+    // Calculate shares to sell to reach target weight
+    const sharesToSell = isOverweight && totalPortfolioValue > 0
+        ? Math.ceil(((portfolioWeight - targetWeight) / portfolioWeight) * totalShares)
+        : 0;
+
+    // SELL signal + Overweight = Strong sell
+    if (isSellSignal && isOverweight) {
+        const mainRisk = analysis?.mainRisk || 'risques identifiés';
+        return `🔴 Allégez fortement : Vendez ${sharesToSell} actions (${stock.symbol}) pour réduire à ~${targetWeight}% du portfolio. Raison : ${mainRisk}`;
+    }
+
+    // Overweight but no sell signal = Moderate reduction
+    if (isOverweight && !isSellSignal) {
+        const partialSell = Math.ceil(sharesToSell / 2);
+        return `🟡 Allégez partiellement : Vendez ${partialSell} actions pour réduire la concentration. Le titre reste intéressant mais trop de risque de concentration.`;
+    }
+
+    // SELL signal but not overweight = Progressive exit
+    if (isSellSignal && !isOverweight) {
+        const progressiveSell = Math.ceil(totalShares / 3);
+        const mainRisk = analysis?.mainRisk || 'signaux négatifs';
+        return `🔴 Sortez progressivement : Vendez ${progressiveSell} actions maintenant, puis surveillez. Raison : ${mainRisk}`;
+    }
+
+    // BUY signal with room to grow
+    if (isBuySignal && portfolioWeight < 15) {
+        const sharesToBuy = Math.floor(((20 - portfolioWeight) / 20) * totalShares);
+        if (sharesToBuy > 0) {
+            return `🟢 Renforcez : Achetez ${sharesToBuy} actions supplémentaires pour porter la position à ~${(portfolioWeight + 5).toFixed(1)}% du portfolio. Opportunité confirmée par l'IA.`;
+        }
+    }
+
+    // BUY signal but already well-sized
+    if (isBuySignal) {
+        return `🟢 Conservez : Position bien dimensionnée (${portfolioWeight.toFixed(1)}%). Rien à faire pour l'instant.`;
+    }
+
+    // HOLD by default
+    return `⚪ Conservez : Position équilibrée (${portfolioWeight.toFixed(1)}%). Surveillez l'évolution et les actualités.`;
+}
