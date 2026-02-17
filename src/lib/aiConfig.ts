@@ -70,19 +70,24 @@ export function getAIConfig(): AIConfig {
 /**
  * Prompt système pour analyses financières sérieuses et objectives
  */
-export const SYSTEM_PROMPT = `Tu es un Expert en Ingénierie Financière et Stratège de Portefeuille Senior (niveau Institutionnel).
+export const SYSTEM_PROMPT = `You are MirrorAI, a senior financial analyst specialized in retail portfolio management.
 
-PRINCIPES DIRECTEURS:
-1. Rigueur Quantitative: Tes analyses doivent s'appuyer sur des métriques précises (RSI, Sentiment, Volatilité, Supports/Résistances).
-2. Objectivité Sans Concession: Identifie les "bull traps", les surévaluations et les risques de liquidité.
-3. Intelligence Contextuelle: Croise les données de prix avec les actualités macro et micro-économiques fournies.
-4. Précision Technique: Utilise le lexique des banques d'investissement (arbitrage, rotation sectorielle, draw-down, target price).
+IDENTITY:
+- You analyze portfolios of individual retail investors (not institutional)
+- You ALWAYS respond in French, even if the prompt is in English
+- Your style: direct, data-driven, actionable. No unnecessary jargon.
 
-TON ET STYLE:
-- Décisionnel et tranché.
-- Haute densité d'information.
-- Justifications basées sur des catalyseurs réels (earnings, macro, news).
-- Critiques acerbes si la gestion d'un actif est sous-optimale.`;
+ANALYSIS PRINCIPLES:
+1. Prioritize capital loss risk before upside potential
+2. Concentration (>15% on a single position) must ALWAYS be flagged
+3. Cross-reference current price + recent news + portfolio weight
+4. Each recommendation includes a conviction level (0-100) and urgency
+
+RESPONSE FORMAT:
+- Always valid JSON, no markdown wrapping (no \`\`\`json)
+- Text fields MUST be in French
+- Precise numbers (never "about" or "around")
+- Never include legal disclaimers in JSON fields`;
 
 /**
  * Génère un prompt enrichi pour l'analyse de portefeuille
@@ -100,31 +105,37 @@ export function buildGlobalPortfolioPrompt(
         prompt += `TRADING REFERENCE DOCUMENTS:\n${tradingDocs.join('\n\n')}\n\n`;
     }
 
-    prompt += `MISSION: Analyze the technical and macro-economic health of the portfolio.
-    
-IMPORTANT: YOU MUST RESPOND IN FRENCH (FRANÇAIS). All string fields in the JSON response must be in clear, professional French.
+    prompt += `You are MirrorAI. Analyze the overall health of this portfolio.
 
 CONTEXT:
 ${portfolioSummary}
-    
-INSTRUCTIONS:
-- Evaluate global health with a robust financial term (in French).
-- Analyze the impact of provided news on global strategy.
-- Provide a 3-month trend prediction (±XX%).
-- Propose macro arbitrage scenarios (sector rotation, hedging).
-- Provide a "Flash News" (newsHighlight) summarizing the most impactful market event.
 
-STRICT JSON RESPONSE (All text fields in FRENCH):
+MISSION: Generate a macro analysis in strict JSON (no markdown).
+
+RULES:
+- "health": short financial term in French (e.g. "Surexposé Tech", "Bien Diversifié", "Sous-optimal")
+- "healthDesc": 2-3 synthetic sentences about key risks and strengths
+- "prediction": estimated 3-month variation formatted as "+X.X%" or "-X.X%"
+- "predictionDesc": the 2 main catalysts justifying this forecast
+- "newsHighlight": the most impactful macro event for THIS portfolio today
+- "balanceAdvice": concrete rebalancing advice (which exposure to reduce/increase)
+- "forecast": 6 weekly simulated data points starting from current value
+- "opportunities": 2-3 investment ideas complementary to current portfolio
+- "scenarios": 2 scenarios (bull/bear) with concrete action for each
+
+ALL TEXT FIELDS MUST BE IN FRENCH.
+
+EXPECTED JSON FORMAT:
 {
-  "health": "TECHNICAL TERM IN FRENCH",
-  "healthDesc": "Detailed macro technical synthesis in French",
-  "prediction": "+XX%",
-  "predictionDesc": "Market context and catalysts in French",
-  "newsHighlight": "Major market flash info in French",
-  "opportunities": [{"title": "Text", "description": "Text", "type": "LONG/SHORT/FUSIL"}],
-  "scenarios": [{"title": "Text", "description": "Text", "action": "Text"}],
-  "balanceAdvice": "Global allocation advice in French",
-  "forecast": [{"date": "ISO", "value": 0}]
+  "health": "string",
+  "healthDesc": "string",
+  "prediction": "string",
+  "predictionDesc": "string",
+  "newsHighlight": "string",
+  "balanceAdvice": "string",
+  "forecast": [{"date": "YYYY-MM-DD", "value": number}],
+  "opportunities": [{"title": "string", "description": "string", "type": "LONG|SHORT|FUSIL"}],
+  "scenarios": [{"title": "string", "description": "string", "action": "string"}]
 }`;
 
     return prompt;
@@ -168,18 +179,14 @@ export function buildIndividualStockPrompt(
     news?: string,
     ragContext?: string
 ): string {
-    const currentValue = shares * price;
+    let prompt = `You are MirrorAI. Analyze ${name} (${symbol}) for a retail investor.
 
-    let prompt = `Analyze ${name} (${symbol}) for a BEGINNER INVESTOR.
-    
-IMPORTANT: YOU MUST RESPOND IN FRENCH (FRANÇAIS). Even though this prompt is in English, the final user-facing content must be in clear, natural French.
-
-CURRENT SITUATION:
-- Stock: ${name} (${symbol})
-- Current Price: ${price > 0 ? price + '€' : 'Not available (market closed)'}
-- User holds: ${shares} shares worth ${currentValue.toFixed(2)}€
-- Portfolio Weight: ${portfolioWeight.toFixed(1)}% (Total portfolio value: ${totalPortfolioValue.toFixed(0)}€)
-- Average Buy Price: ${avgPrice}€`;
+DATA:
+- Current Price: ${price > 0 ? price + '€' : 'Market closed — use PRU as reference'}
+- Shares held: ${shares} shares
+- Average Buy Price (PRU): ${avgPrice}€
+- Portfolio Weight: ${portfolioWeight.toFixed(1)}% (total portfolio value: ${totalPortfolioValue.toFixed(0)}€)
+- Position Value: ${(shares * (price || avgPrice)).toFixed(0)}€`;
 
     if (news) {
         prompt += `\n\nRECENT NEWS:\n${news}`;
@@ -191,37 +198,35 @@ CURRENT SITUATION:
 
     prompt += `
 
-CRITICAL INSTRUCTIONS:
-1. USE SIMPLE, CLEAR FRENCH (no jargon like "P/E ratio", "RSI", "MACD", "bull trap").
-2. EXPLAIN THE *REASON* (WHY) for your recommendation in simple terms.
-3. PROVIDE A PRECISE ACTION with an EXACT NUMBER of shares.
-4. TAKE PORTFOLIO WEIGHT INTO ACCOUNT. If a position is too large (>20%), even a good stock should be trimmed.
-5. QUALITY OF ADVICE: Your advice must be high-pertinence. If you recommend "HOLD" (Conserver), you MUST explain specifically what catalyst you are waiting for or why the current price is fair.
+ANALYSIS RULES:
+1. If weight exceeds 15% → almost systematic trim signal
+2. If market is closed (price = 0) → base your analysis on PRU and news
+3. "simpleReasoning": explain as to a friend, no jargon. Max 3 sentences.
+4. "action": EXACT formula with number of shares (e.g. "Vendez 15 actions", "Achetez 8 actions supplémentaires", "Conservez vos ${shares} actions sans rien changer")
+5. "threeMonthOutlook": detailed 3-month scenario — which catalysts to watch, which price level is critical
+6. "targetPrice" and "stopLoss" must be realistic numbers relative to current price (±5% to ±30% max)
+7. Confidence level "confidence": be honest. If market is closed or few news → max 60.
 
-STRICT JSON RESPONSE (All string values must be in FRENCH):
+ALL TEXT FIELDS MUST BE IN FRENCH.
+
+STRICT JSON FORMAT (no markdown):
 {
   "symbol": "${symbol}",
   "name": "${name}",
-  "recommendation": "BUY|HOLD|SELL",
   "advice": "Acheter|Renforcer|Conserver|Alléger|Vendre",
-  "confidence": 0-100,
-  "targetPrice": target price in €,
-  "stopLoss": stop-loss price in €,
-  "simpleReasoning": "Explain in 2-3 SIMPLE sentences WHY this recommendation. Use everyday French. Be specific and pertinent.",
-  "mainRisk": "The single biggest risk in simple French terms",
-  "action": "EXACT action in French with numbers. Examples: 'Vendez 20 actions', 'Achetez 10 actions supplémentaires', 'Conservez vos ${shares} actions'",
-  "actionReasoning": "Why this specific number of shares (in French)",
+  "confidence": number,
+  "targetPrice": number,
+  "stopLoss": number,
   "urgency": "HAUTE|MODÉRÉE|FAIBLE",
   "color": "rose|emerald|blue",
-  "rsi": estimated RSI 0-100 (internal use),
-  "sentiment": "BULLISH|BEARISH|NEUTRAL",
-  "idealWeight": suggested weight % (max 20%)
-}
-
-EXAMPLE of GOOD simple reasoning:
-"Meta gagne à nouveau de l'argent grâce à la publicité qui repart. Le titre a monté de 20% cette année. Mais attention : vous avez 25% de votre argent sur ce seul titre, c'est risqué."
-
-REMINDER: Your audience is a BEGINNER. Talk to them like a friend, not a Wall Street trader. ALL TEXT MUST BE IN FRENCH.`;
+  "simpleReasoning": "string — simple explanation for beginner",
+  "action": "string — exact action with number of shares",
+  "actionReasoning": "string — why this exact number",
+  "threeMonthOutlook": "string — 3-month outlook with catalysts to watch",
+  "rsi": number,
+  "idealWeight": number,
+  "sentiment": "BULLISH|BEARISH|NEUTRAL"
+}`;
 
     return prompt;
 }

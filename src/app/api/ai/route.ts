@@ -107,7 +107,14 @@ export async function POST(req: Request) {
         payload = {
           contents: [{
             parts: [{ text: enrichedPrompt }]
-          }]
+          }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.7,
+          },
+          thinkingConfig: {
+            thinkingBudget: 1024
+          }
         };
 
         console.log("🚀 Envoi de l'analyse au moteur IA (Gemini)...");
